@@ -1,0 +1,24 @@
+{
+  "name": "netrunner-benchmark-harness",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Headless harness for LLM-vs-rules-AI Netrunner on the Chiriboga engine (Phase 1)",
+  "type": "module",
+  "license": "GPL-3.0",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "run-game": "tsx src/cli.ts run-game",
+    "batch": "tsx src/cli.ts batch",
+    "determinism": "tsx src/cli.ts determinism",
+    "test": "npm run typecheck && npm run determinism -- --seed 7"
+  },
+  "dependencies": {
+    "lz-string": "^1.5.0",
+    "playwright": "^1.49.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0"
+  }
+}

@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<!-- Harness entry point: minimal engine loadout for headless AI-vs-AI games.
+     Modeled on engine_text.html (text mode, no PHP). Engine files are loaded
+     as-is; all harness behavior lives in harness/page/bootstrap.js.
+     URL params: faceoff=1&p=r&r=<lz-deck>&c=<lz-deck>&seed=<int> -->
+<html>
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<meta name="robots" content="noindex">
+		<title>Chiriboga Harness</title>
+		<link rel="stylesheet" type="text/css" href="style.css">
+		<script src="jquery/jquery-3.2.1.min.js"></script>
+		<script src="cardrenderer/pixi.min.js"></script>
+		<script src="cardrenderer/pixi-particles.min.js"></script>
+		<script src="cardrenderer/particlesystems.js"></script>
+		<script src="cardrenderer/cardrenderer.js"></script>
+		<script src="deck/lz-string.min.js"></script>
+		<script src="deck/seedrandom.min.js"></script>
+		<script>
+			var cardSet = []; //prepare to receive card definitions
+			var setIdentifiers = []; //set identifiers
+		</script>
+		<script>var accessibilityMode="text";</script>
+		<script src="init.js"></script>
+		<script src="phase.js"></script>
+		<script src="command.js"></script>
+		<script src="checks.js"></script>
+		<script src="mechanics.js"></script>
+		<script src="utility.js"></script>
+		<script src="sets/systemgateway.js"></script>
+		<script src="sets/systemupdate2021.js"></script>
+		<script src="sets/tutorial.js"></script>
+		<script src="decks.js"></script>
+		<script src="runcalculator.js"></script>
+		<script src="ai_corp.js"></script>
+		<script src="ai_runner.js"></script>
+		<script>var versionReference='harness';</script>
+	</head>
+
+	<body id="body" onload="Init();">
+		<div id="contentcontainer" class="content">
+			<div id="output"></div>
+			<input id="card-search" type="text" value="" placeholder="Card search">
+			<p id="search-result"></p>
+			<form id="cmdform">
+				<input type="submit" value="Submit">
+				<span id="turnphase"></span>
+				<input id="command" type="text" value="">
+			</form>
+		</div>
+		<div id="menubar"></div>
+		<div id="header"></div>
+		<div id="fps"></div>
+		<div id="footer"></div>
+		<div id="modal" class="modal">
+			<div id="modalcontent" class="modal-content"></div>
+		</div>
+		<div id="history-wrapper">
+			<div id="history"></div>
+		</div>
+		<div id="loading" class="modal" style="display:flex;">
+			<div class="modal-content-inactive"><h1 id="loading-text">Loading...</h1></div>
+		</div>
+		<div id="menu" class="modal">
+			<div id="menucontent" class="modal-content-inactive">
+				<label for="narration"><input type="checkbox" id="narration">Narrate AI</label>
+				<select id="rewind-select" disabled>
+					<option value="">Rewind</option>
+				</select>
+			</div>
+		</div>
+		<!-- Harness bootstrap: runs after engine scripts, before body onload fires Init(). -->
+		<script src="harness/page/bootstrap.js"></script>
+	</body>
+</html>
