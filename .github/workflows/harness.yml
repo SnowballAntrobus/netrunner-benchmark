@@ -1,0 +1,28 @@
+name: harness
+on:
+  push:
+    paths: ["harness/**", "harness.html", ".github/workflows/harness.yml"]
+  pull_request:
+    paths: ["harness/**", "harness.html", ".github/workflows/harness.yml"]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: harness
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: harness/package-lock.json
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: npm run typecheck
+      # M1 acceptance: a seeded rules-vs-rules game is reproducible.
+      - run: npx tsx src/cli.ts determinism --seed 7
+      # M2 acceptance: behavior matches the frozen golden fixtures.
+      - run: npx tsx src/cli.ts golden check
+      # M3 acceptance: no hidden information leaks from the state serializer.
+      - run: npx tsx src/cli.ts invariant
