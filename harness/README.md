@@ -21,6 +21,8 @@ npm run batch -- --games 10 --seed 1          # seeds 1..10, summary to out/
 npm run determinism -- --seed 7               # same seed twice, logs must match
 npm run golden -- check                       # replay golden fixtures, diff logs
 npm run golden -- record                      # re-bless fixtures after intended changes
+npm run invariant                             # no-cheating serializer check (5 seeds)
+npm run invariant -- --seeds 7 --corp "Thorny Grid" --runner "Trash King"
 npm test                                      # typecheck + determinism
 ```
 

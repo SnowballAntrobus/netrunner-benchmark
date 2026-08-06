@@ -78,6 +78,39 @@
   var narration = document.getElementById("narration");
   if (narration) narration.checked = false;
 
+  // ---- Turn tracking ------------------------------------------------------
+  // The engine has no global turn counter; ChangePhase flips playerTurn at
+  // identifiers "Corp 1.1" / "Runner 1.1". Wrap it (global function, no
+  // engine edit) to maintain __harness.turn and per-turn log markers that
+  // the serializer synthesizes into its log tail. capturedLog itself is
+  // never touched.
+  window.__harness.turn = null;
+  window.__harness.turnMarkers = [];
+  var turnCounts = { corp: 0, runner: 0 };
+  // Forward ALL arguments — ChangePhase(src, skipInit); dropping skipInit
+  // makes DecisionPhase returns re-run Init forever (caught as a decision
+  // storm: 93k decisions, game never ends).
+  var engineChangePhase = ChangePhase;
+  ChangePhase = function () {
+    // Measure the log BEFORE the engine runs the transition: turn-begin
+    // triggers log during ChangePhase itself and must render AFTER the
+    // marker.
+    var preLen = typeof capturedLog !== "undefined" ? capturedLog.length : 0;
+    var ret = engineChangePhase.apply(this, arguments);
+    var id = currentPhase ? currentPhase.identifier : "";
+    var side = id === "Corp 1.1" ? "corp" : id === "Runner 1.1" ? "runner" : null;
+    if (side) {
+      turnCounts[side]++;
+      window.__harness.turn = { side: side, number: turnCounts[side] };
+      window.__harness.turnMarkers.push({
+        logIndex: preLen, // marker renders above the line at this index
+        text: "=== " + (side === "corp" ? "Corp" : "Runner") + " turn " +
+          turnCounts[side] + " begins ===",
+      });
+    }
+    return ret;
+  };
+
   // ---- Game end hook ------------------------------------------------------
   // PlayerWin is a global function declaration (utility.js); rebinding the
   // name intercepts every engine call site without touching engine files.

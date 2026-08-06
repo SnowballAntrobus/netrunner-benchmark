@@ -75,6 +75,61 @@ logs + results against the frozen fixtures; `npm run golden -- record`
 re-blesses after an intentional behavioral change. Sensitivity was verified
 by perturbation (see ledger item 1).
 
+## Honest state serializer (M3)
+
+`harness/page/serializer.js` exposes `__harness.stateFor(side)` — the
+game from one seat's perspective as JSON. Every visibility decision defers
+to the engine's own `PlayerCanLook`; the serializer never re-implements
+visibility rules, and both seats run the identical code path. Hidden cards
+serialize as `{hidden: true}` plus public counters (advancement); opaque
+piles (HQ, R&D, grip) serialize as counts plus any individually-known
+cards. The log tail filters private channels (SPOILER omniscient dumps,
+either AI's reasoning lines, start-of-game decklist dumps).
+
+The **no-cheating invariant** (`npm run invariant`, `&invariant=1`) checks
+at every AI decision, for both viewers, that (a) no title of a card the
+viewer cannot see appears in the structural state, and (b) no
+private-channel line survived the log filter. Notes from validating it:
+
+- The log check keeps its own private-line patterns, deliberately NOT
+  reusing the serializer's filter predicate — a shared predicate made the
+  check tautological (planted-leak negative test caught this).
+- `phase.title` is exempt from the structural check: card abilities create
+  decision phases named after the card, publicly announced via Log() at
+  TriggerAbility, and the title can outlive the card's visibility — Spin
+  Doctor shuffles *itself* into R&D while its decision phase is still
+  named after it (surfaced as a false positive on trap/tag matchups).
+  `phase.identifier` stays checked.
+- Serialization is observation-only: golden fixtures pass unchanged with
+  the invariant wrapper active.
+
+**Log-channel audit** — two passes. *Corpus* (26k lines, 19 games):
+private channels are exact prefixes `SPOILER:` (omniscient dumps), `AI:`
+(either AI's reasoning), `RC:` (RunCalculator diagnostics — runner-AI
+private; missed by the first filter, caught in sample review),
+`ERROR:`/`DEBUG:` (engine channels), `[` (decklist dumps), plus the
+PixiJS banner. *Source* (every `Log(`/`console.log(` site in the loaded
+engine files + sets): confirmed `AI:` and `RC:` come from single helper
+functions (`_log`, one prefix each); found `AI would have chosen:`
+(testAI shadow mode — dormant until M4's agreement metric, filtered
+proactively) and classified the remaining raw sites as dormant in
+harness configuration: AI-error fallback option dumps (fire only on AI
+exceptions, surfaced via __harness.errors), a human-only usability
+notice (`activePlayer.AI == null` gate), non-text-mode label warnings,
+and commented-out debug lines. End-of-game summaries ("R&D size:",
+"Grip size:", "Agendas were stolen from:") are public counts/history.
+Filters must stay exact-prefix: card-trigger announcements share the
+"Title:" shape ("Pantograph: Gain 1[c] ... triggered") and are public
+narration.
+
+**Turn tracking**: the engine has no turn counter; bootstrap wraps
+ChangePhase (forwarding ALL arguments — dropping skipInit re-runs
+DecisionPhase Inits forever) to maintain `state.turn` and synthesize
+"=== Corp turn N begins ===" markers into the serialized log tail.
+capturedLog is never mutated, so golden fixtures are unaffected. Marker
+log-position is measured before the engine transition runs, so turn-begin
+triggers render after the marker.
+
 ## Browser dependencies observed (for a future Node/jsdom host)
 
 Running the engine outside a real browser will need at minimum: jQuery

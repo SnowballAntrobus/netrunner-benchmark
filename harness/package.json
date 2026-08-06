@@ -11,6 +11,7 @@
     "batch": "tsx src/cli.ts batch",
     "determinism": "tsx src/cli.ts determinism",
     "golden": "tsx src/cli.ts golden",
+    "invariant": "tsx src/cli.ts invariant",
     "test": "npm run typecheck && npm run determinism -- --seed 7"
   },
   "dependencies": {

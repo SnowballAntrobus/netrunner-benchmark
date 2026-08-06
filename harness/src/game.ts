@@ -32,6 +32,9 @@ export interface GameRecord {
   log: string[];
   rngTrace?: number[]; // per-log-line Math.random draw counts (&rngtrace=1)
   rngStacks?: string[]; // stacks for draws in &rngstack=N-M
+  invariantChecks?: number; // serialized-state checks performed (&invariant=1)
+  invariantViolations?: object[]; // no-cheating violations found (&invariant=1)
+  sampleState?: object | null; // one mid-game runner-view state (&invariant=1)
 }
 
 interface HarnessSurface {
@@ -163,6 +166,26 @@ export async function runGame(options: GameOptions, browser?: Browser): Promise<
       })) as { trace: number[]; stacks: string[] };
       record.rngTrace = debug.trace;
       record.rngStacks = debug.stacks;
+    }
+
+    if (options.extraParams?.includes("invariant")) {
+      const inv = (await page.evaluate(() => {
+        const h = (window as unknown as {
+          __harness: {
+            invariantChecks: number;
+            invariantViolations: object[];
+            sampleState: object | null;
+          };
+        }).__harness;
+        return {
+          checks: h.invariantChecks,
+          violations: h.invariantViolations,
+          sample: h.sampleState,
+        };
+      })) as { checks: number; violations: object[]; sample: object | null };
+      record.invariantChecks = inv.checks;
+      record.invariantViolations = inv.violations;
+      record.sampleState = inv.sample;
     }
   } catch (e) {
     record.errors.push(`host: ${String(e)}`);

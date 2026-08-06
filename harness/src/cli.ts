@@ -4,6 +4,7 @@
  *    tsx src/cli.ts batch       [--games N] [--seed N] [--corp ...] [--runner ...]
  *    tsx src/cli.ts determinism [--seed N]   # same seed twice, logs must match
  *    tsx src/cli.ts golden record|check      # golden-log regression fixtures
+ *    tsx src/cli.ts invariant [--seeds a,b,c] # no-cheating serializer check
  *
  *  Game records are written to harness/out/ as JSON; batch also writes a
  *  summary. Exit code is non-zero on any failed acceptance condition.
@@ -96,6 +97,34 @@ if (command === "run-game") {
     }
   }
   process.exit(1);
+} else if (command === "invariant") {
+  const seeds = arg("seeds", "101,102,103,104,105").split(",").map((x) => parseInt(x, 10));
+  const browser = await launchBrowser();
+  let totalChecks = 0;
+  let failed = 0;
+  for (const s of seeds) {
+    const record = await runGame({ ...base, seed: s, extraParams: "&invariant=1" }, browser);
+    const violations = record.invariantViolations ?? [];
+    const checks = record.invariantChecks ?? 0;
+    totalChecks += checks;
+    const ok = record.status === "completed" && violations.length === 0 && checks > 0;
+    if (!ok) failed++;
+    console.log(
+      `seed=${s} ${ok ? "PASS" : "FAIL"} status=${record.status} ` +
+      `checks=${checks} violations=${violations.length}`
+    );
+    for (const v of violations.slice(0, 5)) console.log("  ", JSON.stringify(v));
+    if (record.sampleState) {
+      await save(`state-sample-${s}.json`, record.sampleState as never);
+    }
+    await save(`invariant-${s}.json`, record);
+  }
+  console.log(
+    failed === 0
+      ? `INVARIANT: ${totalChecks} state serializations across ${seeds.length} games, zero leaks`
+      : `INVARIANT: FAILED for ${failed}/${seeds.length} games`
+  );
+  process.exit(failed === 0 ? 0 : 1);
 } else if (command === "golden") {
   const mode = process.argv[3] === "record" ? "record" as const : "check" as const;
   process.exit(await golden(repoRoot, mode));
