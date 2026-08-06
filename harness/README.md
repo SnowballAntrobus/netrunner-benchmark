@@ -23,8 +23,26 @@ npm run golden -- check                       # replay golden fixtures, diff log
 npm run golden -- record                      # re-bless fixtures after intended changes
 npm run invariant                             # no-cheating serializer check (5 seeds)
 npm run invariant -- --seeds 7 --corp "Thorny Grid" --runner "Trash King"
+npm run llm-game -- --model mock --seed 7     # keyless end-to-end LLM-seat game
+npm run llm-game -- --seed 7                  # Claude as Runner (needs ANTHROPIC_API_KEY;
+                                              #   model via --model or HARNESS_MODEL,
+                                              #   default claude-haiku-4-5)
+                                              # prompt knobs: --profile neutral|expert,
+                                              #   --reasoning brief|extended|none
+                                              #   (see docs/PROMPTING.md)
 npm test                                      # typecheck + determinism
 ```
+
+LLM games write three artifacts to `out/`: the game record JSON, the full
+system prompt, and a JSONL decision log — one record per decision (both
+seats), each carrying the engine's ReproductionCode so any position can be
+replayed. **See docs/DECISION_LOG.md for the annotated format guide.**
+
+Rules text for the system prompt comes from NSG's official learn-to-play
+guides (`npm run fetch-rules` once, review the extracted text, commit the
+snapshots in `harness/rules/`), or from the built-in digest with
+`--rules digest` (CI's keyless path). The rules source is recorded in the
+game record and in the saved system prompt.
 
 The golden suite (`fixtures/golden/`) is the regression net for any
 engine-affecting change — CI runs it on every push; see docs/ENGINE.md.

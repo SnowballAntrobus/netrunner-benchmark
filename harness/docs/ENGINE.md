@@ -130,6 +130,22 @@ capturedLog is never mutated, so golden fixtures are unaffected. Marker
 log-position is measured before the engine transition runs, so turn-begin
 triggers render after the marker.
 
+## LLM seat (M4)
+
+`page/llmplayer.js` swaps a delegation shell into `runner.AI` just before
+StartGame: `Object.create(rulesAiInstance)` with only CommandChoice /
+SelectChoice overridden. This matters because cards call ~70 rules-AI
+methods/fields behind `if (player.AI != null)` guards — a bare object
+crashes the first time a card consults it; the shell gives cards sane
+rules-AI bookkeeping while decisions route to the host bridge
+(`__harnessDecide`). `preferred` hints that cards set for the rules AI are
+deliberately ignored. Option descriptions reuse the serializer's
+PlayerCanLook-honest cardEntry. The opposing rules AI's decisions are
+logged into the same JSONL stream (options described from ITS view — the
+stream is host-side analysis data, never shown to the LLM). Both
+decklists are granted to the LLM in the system prompt (open decklists) —
+a deliberate prompt-layer grant, distinct from serializer honesty.
+
 ## Browser dependencies observed (for a future Node/jsdom host)
 
 Running the engine outside a real browser will need at minimum: jQuery

@@ -26,3 +26,6 @@ jobs:
       - run: npx tsx src/cli.ts golden check
       # M3 acceptance: no hidden information leaks from the state serializer.
       - run: npx tsx src/cli.ts invariant
+      # M4 acceptance (keyless): full LLM-seat game via the mock client,
+      # exercising the retry and fallback paths + JSONL schema validation.
+      - run: npx tsx src/cli.ts llm-game --model mock --seed 7

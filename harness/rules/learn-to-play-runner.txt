@@ -1,0 +1,755 @@
+# Null Signal Games — Learn to Play: Runner
+# Source: https://nullsignal.games/players/learn-to-play/learn-to-play-runner/
+# Retrieved: 2026-08-06
+# Copyright Null Signal Games; vendored for research use with attribution.
+
+## Learn to Play: Runner
+ 
+ 
+ 
+
+ 
+
+In the future, humanity is spread across the solar system, but is held in the iron grip of colossal megacorporations. Corporations control every aspect of your daily life, and seek to redefine life itself with android labor. Their ubiquitous Network contains endless oceans of information, the Corps’ greatest strength&#8230; and their singular weakness. 
+
+In this asymmetric card game, play as Runners , diverse hackers seeking to bring down or profit from the systems of the Lunar city of Heinlein, or as Corps , advancing their agendas to wring even more blood and profit from the lunar dust. You and another player will take on one of these roles, either Corp or Runner. There are two versions of this Learn to Play rulebook, so decide ahead of time which side you will play and read the appropriate guide. You can always switch sides later! 
+
+This guide will teach you everything you need to know to get started with the cards provided in the System Gateway Starter Pack . One copy of the Starter Pack contains one deck each for both a Corp and a Runner to learn how to play together. You will also need some counters to keep track of various in-game resources. A pile of 1 cent coins will suffice. 
+
+ Table of Contents (click to expand) 
+
+ 
+
+Table of Contents 
+ Overview 
+ Introduction to Card Games 
+ Contents of the Starter Pack 
+ Anarch 
+ Criminal 
+ Shaper 
+ What You Have 
+ Events 
+ Resources 
+ Programs 
+ Hardware 
+ Subtypes 
+ Playing a Turn 
+ Steps of a Turn 
+ Playing and Using Cards 
+ What to Expect from the Corp 
+ Runs 
+ Why should I run? 
+ How do I start a run? 
+ What happens when I get through? 
+ What happens when I access a card? 
+ Can the Corp stop me from getting in? 
+ Getting Started 
+ Frequently Asked Questions 
+ Card Clarifications 
+ Cleaver 
+ Carmen 
+ Unity 
+ Mayfly 
+ Tread Lightly 
+ Docklands Pass 
+ Pennyshaver 
+ Red Team 
+ Creative Commission 
+ VRcation 
+ Jailbreak 
+ Overclock 
+ Telework Contract 
+ Verbal Plasticity 
+ Opening the Booster Pack 
+ Viruses 
+ Tags 
+ Meat Damage 
+ Funhouse 
+ AMAZE Amusements 
+ What’s Next? 
+ Appendix 
+ 
+
+## Overview
+
+ “How are you feeling now?” asks Jericho. 
+
+ "What am I feeling right now?" I’m stalling, not sure how to answer. There’s sweat beading on my neck, and my mouth feels dry no matter how much I try to wet it. The old cushion under me is lumpy and tattered. The cable between my fingers radiates heat. 
+
+ “Like I’m about to jump out a damn hopper a thousand feet up with no chute,” I smirk nervously towards the holo hovering before me. Jericho’s face smiles up at the console on my desk like a proud parent. “You sure this is safe?” 
+
+ “Running? Hell no,” he cackles back. “But there’s a whole ‘nother world on the other side of that cable. Full of magic, and wonder, and myster—” 
+
+ “And money,” I cut in, raising the jack to my neck. 
+
+ “And money,” he assures me. 
+
+ I jack in. 
+
+ 
+
+As a RUNNER, you are an illegal hacker who is trying to expose Corporate AGENDAS for principle, fun, or profit. Each of the Corp’s agendas is worth a designated number of AGENDA POINTS. To win the game, you’ll need to STEAL them from the Corp’s SERVERS before they can ADVANCE their plots and SCORE them. The first player to earn 7 agenda points wins. 
+
+In order to steal the Corp’s agendas, you’ll need to RUN their servers to gain ACCESS to their cards. Of course, the Corps don’t like their hard work being undermined, so they’ll be protecting their servers with ICE. In order to get past the ice, you’ll use PROGRAMS, especially your special ICEBREAKERS. 
+
+If you can successfully hack through the Corp’s ice, you’ll be able to BREACH their servers and access the cards within. Not every card you access will be an agenda, but if you do happen to find your way to an agenda you get to steal it. 
+
+## Introduction to Card Games
+
+If this is your first time playing a card game, there are a couple things common in card games that you should know. 
+
+First of all, you’ll only be allowed to use your cards at certain times of the game. Each player starts the game with all their cards shuffled up into their deck. Neither player is allowed to look at the cards hidden in either deck. You DRAW cards from your deck to put them into your hand. The cards in your hand are the ones you can actually play to the table, and you should keep them secret from the Corp until you do so. If a card gets used up or destroyed for one reason or another, it goes to your discard pile faceup. 
+
+As a Runner, your deck is called your STACK, your hand is called your GRIP, and your discard pile is called your HEAP. Putting a card into the play area is referred to as INSTALLING it. Putting a card into your discard pile is typically referred to as TRASHING it. 
+
+The other important thing to know about card games is the Golden Rule: if the text on a card seems to contradict the rules of the game, then the card text wins. One reason card games are so exciting is that cards get to change or break the rules! 
+
+Make sure you read each card in your hand carefully to catch these exceptions and figure out how they’ll come in handy. Although you can’t anticipate what cards the Corp might have, read their cards as they play the game, too. Over time you’ll become familiar with the kinds of things the Corp is able to do. 
+
+## Contents of the Starter Pack
+
+The Starter Pack of System Gateway contains everything you need to learn how to play the game, plus some bonus material. The pack is separated into two sections by a divider card with the words “STOP HERE.” 
+
+Before the divider are the following cards: 
+
+ 
+An action reference card. (More on that later.) 
+The Runner identity known as The Catalyst . 
+A starter deck of 30 Runner cards for you to use in your first game. 
+The Corp identity known as The Syndicate . 
+A starter deck of 34 Corp cards for your opponent to use in the first game. 
+
+These are the cards you’ll use for your first game. Make sure you only use the cards with red card backs. The cards with blue backs are for your opponent. During your first game, you’ll have 30 cards in your deck, and you’ll only need 6 agenda points to win instead of 7. 
+
+After the divider card is a booster pack of new Runner and Corp cards to add to the decks after you’ve played a game or two. This will bring your deck up to the more standard size of 40 cards, at which point you’ll play to 7 points as normal. We’ll explain later when to play with these cards. 
+
+If you look through the cards in your deck, you’ll notice that there are several different colors of cards. Each color represents a different FACTION in Netrunner. Everyone has a different motivation for jacking into the Net, and after playing the game a few times you’ll start to get a feel for which faction you like to play the most. 
+
+## Anarch
+
+ 
+ 
+
+ It doesn't have to be this way. 
+
+ After centuries of corporate control, the laws of the market seem as real and unbreakable as the laws of physics. When you can’t bear living “sensibly” anymore, there is no choice but to attempt the impossible. And sometimes, it works. It works because we’re desperate, it works because we’ve been lied to. It works because anything is possible. 
+
+ The passions that drive Anarchs are as diverse as the disruptive tactics they employ. To the corp, they are the enemy no plan survives contact with. Anarchs are unpredictable, pushing their limits, they run for a better future. 
+ 
+ 
+
+## Criminal
+
+ 
+ 
+
+ Some runners have learned that the only way to get ahead in the system is to step outside it. 
+
+ These Criminals know better than to draw attention to their exploits, and so they work in the shadows, sneaking their way into corporate accounts, or they blend in, pretending to be a trusted friend in order to obtain credentials that they definitely should not have. Crims run because it is profitable, whether it be by siphoning funds or selling corporate secrets to the highest bidder. 
+
+ As long as there is a profit to be made from running, Criminals will continue to run. 
+ 
+ 
+
+## Shaper
+
+ 
+ 
+
+ Shapers run. 
+
+ They don’t run for money, they don’t run for change. They run because they can. They run for fame, for notoriety, for fun. They run because, to them, it is the purest form of self-expression. It’s a challenge, to tinker together the perfect program, to find the most efficient solution to their problems. Though it may take some time for them to find the correct solution, once they do they can crack any server. The contents of the server don't matter. 
+
+ All that matters is the run. 
+ 
+ 
+
+## What You Have
+
+There are four different types of cards in your deck. Most of these cards you’ll be installing into the play area, except for your EVENTS. You also have an IDENTITY card representing the Runner character that you are playing as. For now, you’ll be playing as The Catalyst . 
+
+Your identity card has (1) a name, (2) a default memory limit, (3) types and subytypes, and (4) a text box. 
+
+ 
+
+Normally, identity cards have special abilities in their text boxes. The Catalyst does not—only flavor text, which is italicized text written to give a glimpse into the world of Netrunner. Flavor text has no impact on gameplay. 
+
+## Events
+
+Events are one-time activities that you can engage in to rig up, get in, and get paid. Instead of installing them like your other cards, events are your one-shot effects. 
+
+Every event card has: (1) a name, (2) a play cost, (3) a type (and often subtypes), and (4) abilities. 
+
+ 
+
+## Resources
+
+Resources are contacts you can tap for a leg up against the Corp. A job. A friend. A place where you're a familiar face. A place that will swear they’ve never seen you before. 
+
+Every resource card has: (1) a name, (2) an install cost, (3) a type (and often subtypes), and (4) abilities. 
+
+ 
+
+## Programs
+
+Programs are sophisticated pieces of software that provide you with a variety of useful abilities. There are special programs called ICEBREAKERS that help you deal with the Corp’s ice. Programs are different from resources and hardware in that they have a MEMORY COST, which limits the number of programs you can have in play at any given time. 
+
+Every program card has: (1) a name, (2) an install cost, (3) a memory cost, (4) a type (and often subtypes), and (5) abilities. Programs with the icebreaker subtype also have (6) strength. Programs without that subtype will have a dash in the corner, to indicate they do not have strength. 
+
+ 
+
+## Hardware
+
+Hardware represents the physical storage location for digital programs. Some hardware can increase the number of MEMORY UNITS you have for installing programs. 
+
+Every hardware card has (1) a name, (2) an install cost, (3) a type (and often subtypes), and (4) abilities. 
+
+ 
+
+## Subtypes
+
+While the above list covers the only types of cards you have, many of your cards will note one or more subtypes after the type. Additional subtypes are separated by a hyphen (-). For example, the Pennyshaver card above is a hardware card with the subtype console . 
+
+## Playing a Turn
+
+ The world melts away into a smear of color. A rising tone fills my ears. Suddenly, everything cuts to black. 
+
+ I’m falling. 
+
+ The walls come back slowly, fading into streaks of blue. A familiar voice whips past my ears, as if from far away. 
+
+ “Hey buddy, still with me?” 
+
+ “Yeah?” The words are ripped from my lips and tossed into the void. 
+
+ “Whoa, whoa there. I can hear you just fine. You’ve still got control of your motor functions, yeah? The first dive can be a bit rough. Just follow my voice and you’ll be fine.” 
+
+ A pixelated spot of blue materializes to my left, and slowly sharpens into a snake. It looks towards me, then swims over. 
+
+ Jericho’s voice. “There we go. Buckle up, we’re landing soon.” 
+
+ I look down on a small pane of rapidly approaching white. There are things down there, wriggling like ants, but I’m falling too fast to focus. I plummet through, into a world of shapes and spires, and hit the ground, kicking up a puff of light. 
+
+ The snake lands on my shoulder, grinning. “Welcome to the real NET, kiddo.” 
+
+ 
+
+There are two kinds of resources in Netrunner: the CLICK ( click ) and the CREDIT ( credit ). Clicks measure time, while credits measure money. You spend clicks to take ACTIONS during your turn, and doing most anything will also cost some number of credits. 
+
+ 
+
+On each of your turns you have FOUR clicks to spend; essentially, you get to do four things on your turn. There are a few BASIC ACTIONS that are always available to you, as shown on the red side of the action reference card. You don’t have to worry about the last action on the reference card for your first game. 
+
+ 
+ click : Gain 1 credit . 
+ click : Draw 1 card. 
+ click : Play 1 event from your grip. 
+ click : Install 1 hardware, program, or resource from your grip. 
+ click : Run any server. 
+
+In addition to these basic actions, some cards will give you access to other special actions. An action on a card is always written with a click symbol at the start followed by a colon, like so: “ click : Place 3 credit on this resource.” 
+
+ 
+
+When it is your turn, you must take four actions one at a time in any combination. You can take them in any order, and you can repeat actions if you like, but you cannot end your turn with click to spare. Use the track on the action reference card to keep track of your available click as you take actions. 
+
+After you take actions, your turn ends, and it becomes the Corp’s turn. Before you can pass your turn over, check to see if you have more than five cards in your grip. If you do, you have to choose and discard cards from your grip until you have only five. 
+
+To show that you’re done with your turn, flip the action reference card over to the blue Corp side. 
+
+## Steps of a Turn
+
+ 
+Action phase 
+Gain click click click click for taking actions. 
+Resolve any “when your turn begins” abilities. 
+Take actions until you run out of click . 
+Discard phase 
+If you have more than five cards in your grip, discard until you have only five cards. 
+Your turn ends and it becomes the Corp’s turn. 
+
+## Playing and Using Cards
+
+One of the actions you can take on your turn is to play an event card from your grip. Events are your one-shot effects: put the event you wish to play faceup into the play area so the Corp can see it, pay credits equal to its PLAY COST, and follow the instructions in the text box. Afterward, trash the event to your heap (discard pile). 
+
+ 
+ 
+
+ Example: You want to play the event VRcation from your grip. To do so, you must reveal it and pay its play cost of 1 credit . Then you draw 4 new cards from your stack and lose click (unless you just spent your last click to play VRcation!). Finally, trash VRcation to your heap. 
+ 
+ 
+
+The rest of your cards (hardware, programs, and resources) stay on the table once they enter play instead of getting trashed immediately. Before you can benefit from one of these cards, you must first INSTALL it into the play area by paying its INSTALL COST. Once a card is installed, you get access to the abilities listed in its text box. 
+
+Programs are special because they have a memory cost in addition to their install cost. The memory cost is not something you have to pay in order to install a program. Instead, the number of programs you can have installed at any given time is limited by the number of available MEMORY UNITS (MU, also marked with mu ) you have. The total memory cost among all your installed programs can never go above the number of memory units you have. You start the game with 4 memory units granted by your identity card, but cards can give you more. 
+
+ 
+
+You can still install a new program if you are already at capacity from your available memory units, but in order to do so you first have to trash programs to make enough room. 
+
+ 
+
+ Example: You want to install the program Unity from your grip. To do so, you must put it into the play area and pay its install cost of 3 credit . However, you already have 4 mu (MU) of programs installed: 2 mu from Mayfly and 1 mu each from Cleaver and Carmen. In order to install Unity, you will also have to trash one of your already installed programs to free up some MU. 
+
+## What to Expect from the Corp
+
+The Corp player will spend their clicks to add cards to their board facedown, invest in those cards, and keep their economy going, all in service of scoring out agendas before you can get your greedy paws on them. The Corp installs all of their cards face-down. Instead of paying the cost for a card up-front, the Corp will pay when they activate that card by turning it face-up. This is called REZZING. 
+
+ 
+
+The Corp’s play area is divided into areas called SERVERS. Each server has two sections of installed cards: the ROOT and the ICE. The Corp installs ice in front of servers to defend them, and they install their other cards in the roots of servers in order to use those cards. 
+
+The Corp starts the game with three CENTRAL SERVERS. In addition to ice and a root, each central server is associated with one of the Corp’s out-of-play areas: HQ is the central server containing the Corp’s hand (represented by the Corp’s identity card), R&D is the central server containing the Corp’s deck, and ARCHIVES is the central server containing the Corp’s discard pile. 
+
+The Corp can create any number of new servers in addition to their central servers as well. Servers created during the game are called REMOTE SERVERS. Remote servers are not associated with any out-of-play areas. 
+
+Even though you won’t know what cards the Corp installs until they rez them, the location of an installed card can tell you what to expect. The Corp isn’t allowed to move their cards around once they are installed, except to trash old cards when they install new ones. 
+
+An UPGRADE is an installable that boosts a specific server. They are installed oriented vertically inside the root of a server (for central servers, upgrades are typically placed between the corresponding out-of-play area and the ice). The Corp can install any number of upgrades in the root of each server. 
+
+AGENDAS and ASSETS can only go in the roots of remote servers. Unlike upgrades, each remote server is limited to either a single agenda or a single asset. Watch out though: you won’t be able to tell if a card in the root of a remote server is an agenda, asset, or upgrade until you run on it or the Corp reveals their plans. 
+
+The Corp’s other type of installable card is ICE, which are installed oriented horizontally in front of the server the ice is set to PROTECT. The Corp can install any number of ice protecting a given server, placing them in discrete POSITIONS outward from the server toward your side of the table. In order to breach a server, you’ll have to get through the ice one at a time, starting with the outermost piece nearest to you and moving inward toward the server. A bigger server is a more expensive server for you to breach, but it’s also more expensive for the Corp to set up, as each ice costs 1 credit to install for each ice already protecting the server. 
+
+The Corp gets to take THREE click worth of actions on their turn, but they also draw 1 card at the start of each of their turns without spending any clicks. Like you, the Corp has access to basic actions to draw cards, gain credits, install cards, and play operations (one-shot cards like your events). 
+
+They also have a basic action to ADVANCE an installed card, where they pay click and 1 credit to place an ADVANCEMENT COUNTER on the chosen card. The Corp can’t score an agenda until they’ve installed it and advanced it enough times. Typically, agendas worth 1 point require 3 advancement counters, agendas worth 2 points require 4 advancement counters, and agendas worth 3 points require 5 advancement counters. While the Corp has to advance agendas to score them, the Corp’s starter deck has one special asset that can also be advanced. 
+
+ 
+
+One of the tools the Corp can use to directly hit you back is DAMAGE. In your first game or two, the only kind of damage is NET DAMAGE. Whenever you take any amount of damage, you must trash that many cards from your grip at random. If you don’t have enough cards in your grip to trash, you are FLATLINED and lose the game. Most of the time you’ll face net damage from ice during a run, but as you can see, the advanceable asset Urtica Cipher can surprise you with some net damage while masquerading as an agenda the Corp is advancing. Be careful you don’t run with too few cards in your grip. 
+
+ 
+
+While the Corp’s role might seem defensive at first, a smart Corp player will apply pressure and try to set the pace of the game by scoring out agendas rapidly or forcing you to push through remote servers that tax your resources. Your job as the Runner is to shut down those threats and hit the Corp where they are weakest. 
+
+## Runs
+
+Runs are how Runners gain points to win, and therefore what Corporations must defend against. Let’s walk through some of the basics of running. 
+
+## Why should I run?
+
+You run to ACCESS the Corp’s cards. This allows you to STEAL their agenda points, TRASH their assets and upgrades, and anticipate their plans. 
+
+## How do I start a run?
+
+The entire process of attacking a server is called RUNNING. You have a basic action to spend a click to run during your turn, at which point you’ll pick a particular server to attack. Some of your cards also trigger runs. If the Corp hasn’t protected the attacked server well enough, then you’ll make a SUCCESSFUL RUN and BREACH the server. 
+
+## What happens when I get through?
+
+Breaching a server gives you ACCESS to some cards from that server, one at a time. 
+
+ 
+ All Servers : You get to access every card installed in the root of that server. 
+ HQ : You get to access 1 card from the Corp’s hand at random. 
+ R&D : You get to access 1 card from the top of the Corp’s deck. 
+ Archives : You get to access all of the cards in the Corp’s discard pile. 
+
+Whenever you breach a server, you are required to access every card that you are allowed to. 
+
+## What happens when I access a card?
+
+ 
+ Agenda : You STEAL it! This puts it into your score area and is how you acquire points to win the game. This is why running ADVANCED cards (which the Corp has to do to score) is potentially extra valuable! 
+ Asset or Upgrade : You can choose to spend credits equal to the TRASH COST of the accessed card (shown in the bottom right corner of the card) in order to send it straight to Archives faceup. (This option isn’t available if the card is already in Archives.) 
+ Operation or Ice : Nothing happens, but now you know what the Corp might be able to do in the future. 
+
+If you don’t trash or steal the card you access, the Corp will simply return it to where it was before you access the next card, if applicable. 
+
+Some of your cards allow you to access an additional card when you breach HQ or R&D. This is a very powerful ability that lets you make fewer runs for better results. It’s important to know that you won’t ever access the same card during a run, so if you get to access 2 cards from the Corp’s hand, you’ll see two different cards, which is even better than two successful runs on HQ! Similarly, if you get to access 2 cards from R&D, you’ll get to look at the top two cards of the Corp’s deck instead of one. 
+
+## Can the Corp stop me from getting in?
+
+Ice form the bulk of the Corp’s defenses, creating blocks against your intrusion. There are three (important) subtypes of ice: BARRIER, SENTRY, and CODE GATE. Very generally, barriers END THE RUN—that is, stop your progress into the Corp’s system entirely. Sentries hurt you in some way, and code gates tax your resources. 
+
+ 
+ 
+ 
+ Examples of Corp ice you may run up against. 
+
+The most important cards you can install are your ICEBREAKER PROGRAMS. These are the cards that will allow you to deal with the Corp’s ice. Matching up against the subtypes of their ice are your subtypes of icebreaker: FRACTERS, KILLERS, and DECODERS. 
+
+ 
+ 
+ 
+ Examples of your icebreaker programs. 
+
+You also have Mayfly , a special icebreaker that can help you against ice of any subtype for a limited time. 
+
+ 
+
+In order for the Corp’s ice to do anything, they’ll need to be rezzed, just like their assets. The Corp can only rez ice during a run, though, so they’ll have the chance to rez ice before you get to their servers. This means that the first time you ENCOUNTER a piece of ice, you won’t know anything about it until it’s actively trying to affect you. 
+
+You’ll have to deal with every piece of rezzed ice on the server you’re attacking before you can breach the server, starting with the one closest to you and moving one at a time toward the server. Ice have SUBROUTINES, instructions that you must BREAK or they will RESOLVE. Subroutines resolving is bad for you and good for the Corp. In order to avert the effects of the subroutines, you’ll need the right icebreaker (matched with the subtype of ice) and enough credits to use it. Your icebreakers have abilities for both increasing their strength and breaking subroutines. Pay whatever you need to get the icebreaker to the same strength (or higher) as the ice you’re breaking, then pay whatever you need to break the subroutines. 
+
+You don’t necessarily always have to break every subroutine. After you choose which subroutines you can and want to break, all the ones you haven’t broken resolve. If the run hasn’t been ended, next you’ll PASS that ice and continue the run. (The Corp’s ice will stay where it is and stay rezzed, and you’ll again have to deal with it the next time you run this server.) 
+
+When you pay to increase the strength of an icebreaker, the increased strength will only last for the duration of the encounter with the current piece of ice. Once you pass the ice, the icebreaker(s) whose strength you increased will return to their base strength. So, for instance, if you pay 2 credit for an ability on an icebreaker that reads "+3 strength", that +3 strength goes away after you're done encountering the current piece of ice. If you want to use it again on another piece of ice during the run, you'll have to pay 2 credit again. 
+
+In between each piece of ice and right before you reach the server, you have the opportunity to JACK OUT. Jacking out is when you choose to end the run rather than continue. If you do that, the run is UNSUCCESSFUL just as if a piece of ice ended the run, but sometimes doing so is the safest choice depending on the ice you encounter. If you make it past all of the Corp’s ice without the run ending, the run is considered SUCCESSFUL. Then, you breach the attacked server as described above. 
+
+Corporate defenses are often weaker than they look. While it can feel scary to run without knowing what you’re up against, don’t hesitate to run even if you don’t have a full suite of icebreakers yet. Unprotected servers are nearly always a safe bet, and even if your run against a protected server fails, you can always try again next click! 
+
+## Getting Started
+
+By now, you should know all you need to get started. Using the Runner deck provided, set up the game to match the diagram below (this can also be found on the back of your identity card, The Catalyst ): 
+
+ 
+
+Shuffle your stack, then draw 5 cards to form your starting hand in your grip. Start a CREDIT POOL of 5 credit , placing them nearby without covering any cards. Your credit pool is where you keep track of how much money you have throughout the game. 
+
+If you don't like your starting hand, you have one opportunity to shuffle it back into your stack and draw 5 new cards. This is called a mulligan. The Corp chooses whether to keep or mulligan their starting hand first, then you do the same. For your first game, you should take a mulligan if you don’t have any cards that give you money. Then the game can begin. 
+
+The Corp always takes the first turn of the game. They’ll draw a card, take three click worth of actions, then pass the turn over to you. 
+
+As shown in the setup diagram, you don’t get to start with any installed cards, but your play area is divided into three rows for the three card types that stay in play: one row for resources, one for hardware, and one for programs. 
+
+You have four click to spend on your turn. Your first turn might depend on what the Corp does for their first turn, but as a rule of thumb, you want to: 
+
+ 
+Play cards that make you money. 
+Run servers where you think the Corp’s defenses look weak. 
+If you don’t know what to do, draw a card. 
+
+Once you’ve taken all four clicks and discarded down to your maximum hand size, play passes back to the Corp. Keep going back and forth until one of you has won, and check back on these rules as you need to. For this game, you win if you are the first player to acquire 6 agenda points, and you lose if you flatline to damage. 
+
+ 
+
+Armed with this knowledge and following along with this quick reference flowchart, you should be able to handle most runs in your first few games. There are some subtleties to runs that might raise questions as you explore the game more. When you are ready to learn more, or if you run into a situation where you’re not sure who should do what when, check out the in-depth run guide here. 
+
+## Frequently Asked Questions
+
+Below are some common beginner questions that might come up while you learn the ropes. After you’ve played a full game or two, the next section covers where to go from there. 
+
+ Why are the Corp’s cards facedown? 
+
+The Corp doesn’t have to reveal their cards until they want to use their abilities. To use their cards, the Corp must pay the card’s REZ COST to REZ the card—that is, flip it face up. They can rez assets or upgrades at any time, but they can only rez ice when you’re about to encounter it. Agendas are never rezzed—their abilities only become active when they’re scored. 
+
+ When do I get to use “if successful” abilities? 
+
+“If successful” abilities happen as soon as the run is declared successful, before you access any cards. 
+
+ Can I choose not to steal an agenda? 
+
+No. 
+
+ What happens if I can’t draw a card when I would be required to? 
+
+Nothing happens. You don’t reshuffle your deck, you don’t lose, you don’t draw. If this happens to the Corp, though, they lose the game. 
+
+ Can I get cards back from the heap? 
+
+Not unless you have a card that says so. 
+
+ What type of card did the Corp just install? 
+
+If it’s in the root of a central server, it’s an upgrade. If it’s in the root of a remote server, there’s no way to tell, and the Corp does not have to tell you (and you definitely shouldn’t believe them if they do!). 
+
+ When I access the top card of R&D, does the Corp get to see it? 
+
+No. 
+
+ What is HQ/R&D/Archives? 
+
+These names correspond to your grip, stack, and heap, but they have different names so it’s easy to tell them apart when reading card text. HQ is the central server that contains the Corp’s hand, R&D is the central server that contains the Corp’s deck, and Archives is the central server that contains the Corp’s discard pile. 
+
+ When I access more than one card from HQ on a single breach, do I have to put the card I’ve seen back before I look again? (In other words, can I randomly access the same card twice?) 
+
+No. Access a card, then set it aside. Choose a different card to access from the remaining cards. This makes accessing multiple cards on one HQ breach much better than an equal number of single-access breaches on HQ. 
+
+ What happens if I’m forced to lose 1 click , but I don’t have any left? 
+
+Nothing! You got lucky! 
+
+ Can I choose to lose 1 click to pay for an ability if I don’t have any click left to lose? 
+
+No. If you can’t lose any click , then you can’t pay the cost. If you can’t pay the cost, you can’t use the ability. 
+
+ Can I use a click : Get a Thing ability in the middle of a run? 
+
+No. Abilities whose costs start with a click symbol are actions and they cannot be used during other actions. 
+
+ Can I use the bioroid “Lose click ” ability in the middle of a run? 
+
+Yes. While you can’t spend a click to start a new action during another action, you can still lose a click to the cost or effect of another ability. 
+
+ If I pay to use an ability that boosts my icebreaker's strength, how long does that strength increase last? 
+
+When you use a paid ability on an icebreaker to increase its strength (for instance, " 1 credit : +1 strength" on Mayfly), that lasts for the remainder of the encounter with the current piece of ice. Once you pass the ice, the strength increase wears off and the icebreaker returns to its base strength. 
+
+ What does “hosted” mean? 
+
+Whenever a credit or counter is placed onto a card, it is said to be “hosted” on that card. If the text of a card uses the word “hosted”, it refers only to something on that card and not on another card. 
+
+ What do “load”, “empty”, and “take” mean? 
+
+To “load” some credits or counters onto a card is to place them on that card from the bank. They are now “hosted” on that card. A card is “empty” once it runs out of whatever was loaded onto it. “Taking” credits from a card mean you get to remove them from the card and add them to your credit pool. 
+
+ What does that subroutine mean? 
+
+ 
+“ sub End the run.” — The run ends immediately and unsuccessfully. No other subroutines resolve and you do not continue forward on the attacked server. 
+“ sub You may install 1 piece of ice from HQ or Archives directly inward from this ice, ignoring all costs.” — The Corp chooses a piece of ice in HQ or Archives. They immediately install that ice directly inward from the ice with this subroutine (so that you will encounter it right after this ice). Usually installing ice has a cost (based on how many ice are already installed on that server), but installing ice with this subroutine does not incur that cost. 
+“ sub Do 1 net damage. If you trash a card with a printed play or install cost that is an odd number, end the run.” — You must trash one card at random from your grip (hand). (If you cannot, you lose the game.) Look at the trashed card. If it has a play or install cost that is an odd number (1, 3, 5, etc.), the run ends. 
+“ sub Do 2 net damage. The Runner may jack out.” — When the first subroutine on Karunā resolves, you must trash two cards at random from your grip (hand). (If you cannot, you lose the game.) After you take the net damage, you can choose to jack out. If you do, the second subroutine does not resolve, even if you did not break it. 
+“ sub Gain 1 credit .” — Subroutines are addressed to the Corp, so if this subroutine resolves the Corp gets to take 1 credit from the bank and add it to their credit pool. 
+“ sub The Runner loses 3 credit .” — You must remove 3 credit from your credit pool and return them to the bank. If you don’t have 3 credit , you lose as much as they have. 
+“ sub If the Runner has 6 credit or less, end the run.” — Count the number of credits in your credit pool. If you have 6 or less credits, the run ends immediately. 
+
+## Card Clarifications
+
+ 
+ 
+
+## Cleaver
+
+This is your fracter , your icebreaker that can interface with barrier ice. When you encounter a barrier, check its strength. If it’s 3 or less, you can use Cleaver to interface with that ice no problem. If the strength of the ice is higher than 3, you’ll have to spend 2 credit for each point of strength you need to raise Cleaver in order to match. Once the strength of Cleaver matches the strength of the ice, you can spend 1 credit for each one or two subroutines that you want to break (prevent from resolving). 
+ 
+ 
+
+## Carmen
+
+This is your killer , your icebreaker that can interface with sentry ice. It works much the same way as Cleaver above, except it starts at strength 2, goes up by 3 strength at a time for every 2 credit you spend, and breaks subroutines on sentries instead of barriers. Carmen also has a special ability: if you install it during the same turn on which you previously made a successful run, it costs 3 credit to install instead of 5 credit . 
+ 
+
+ 
+ 
+ 
+
+ 
+ 
+
+## Unity
+
+This is your decoder , your icebreaker that can interface with code gate ice. Unity is special because it starts at 1 strength, but every time you spend 1 credit to increase its strength it goes up by an amount equal to the number of icebreakers you have installed. That means it always goes up by at least 1 at a time (because Unity is an icebreaker!), but if you have multiple icebreakers installed it goes up in strength more easily. 
+ 
+ 
+
+## Mayfly
+
+This is a special kind of icebreaker called an AI . It works much like the other breakers with regard to strength, boosting, and breaking. However, Mayfly is not limited to interacting with a specific subtype of ice; you can use it to break subroutines on any ice you want. If you do use Mayfly during a run, you will have to trash it, though. 
+
+Note also that Mayfly uses up 2 memory units ( mu ) instead of 1 like your other programs. 
+ 
+
+ 
+ 
+ 
+
+ 
+ 
+
+## Tread Lightly
+
+During a run initiated with Tread Lightly, the Corp has to pay 3 extra credits to rez any ice protecting that server. This can be very economically taxing for the Corp and even cause them to decline to rez ice at all! 
+ 
+ 
+
+## Docklands Pass
+
+Usually when you breach HQ, you only access 1 card at random from the Corp’s hand. With Docklands Pass, you get to access 2 cards at random from the Corp’s hand the first time you breach HQ. (Access them one at a time.) 
+ 
+
+ 
+ 
+ 
+
+ 
+ 
+
+## Pennyshaver
+
+There are a few things going on with Pennyshaver. First of all, it gives you +1 memory unit ( mu ) for installing programs. Every time you make a successful run (on any server), take a credit from the bank and put it onto Pennyshaver. Later, as an action, you can add one more credit to Pennyshaver, then remove all the credits from it and add them to your credit pool. 
+
+Pennyshaver is also a console hardware. Consoles are special because you can only ever have one installed at a time. You don’t need to worry about this for now, though, because there is only one console in the starter deck. 
+ 
+ 
+
+## Red Team
+
+When you install Red Team, take 12 credit from the bank and place them on Red Team. During your turn you can, as an action, initiate a run against a server. The server you run with Red Team has to be a central server, and you have to run a central that you have not already attempted to run previously in the same turn. If a run you initiate with Red Team is successful, you get to take 3 credit from Red Team and add them to your credit pool before you breach the attacked server. 
+
+Note that because running with Red Team is an action, you cannot combine it with another action that initiates a run, such as playing an event like Tread Lightly. 
+ 
+
+ 
+ 
+ 
+
+ 
+ 
+
+## Creative Commission
+
+When you play this event, first take 5 credit from the bank and add them to your credit pool. Then, if you still have any unspent click for this turn, you have to lose 1 click . 
+ 
+ 
+
+## VRcation
+
+VRcation works much the same way as Creative Commission, except this one lets you draw 4 cards instead of gaining 5 credit . 
+ 
+
+ 
+ 
+ 
+
+ 
+ 
+
+## Jailbreak
+
+Normally, when you initiate a run, you get to choose any server as the attacked server. With Jailbreak, you can only attack HQ or R&D. If the run initiated with Jailbreak is successful, draw 1 card before breaching the server. Then, when you breach the server, you get to access an extra card. 
+ 
+ 
+
+## Overclock
+
+Overclock lets you initiate a run on any server, but before the run begins, you take 5 credit from the bank and place them on Overclock. During the run initiated with Overclock, you can spend credits from it to pay any costs as if those credits were in your credit pool. When the run ends and you trash Overclock, any credits on it that you didn’t spend must be returned to the bank. 
+ 
+
+ 
+ 
+ 
+
+ 
+ 
+
+## Telework Contract
+
+Telework Contract is a card with a load/empty ability. When you install it, take 9 credit from the bank and put them on Telework Contract. Once per turn you can, as an action, take 3 credit off of Telework Contract and add them to your credit pool. Once you have taken all the credits off of Telework Contract, you trash it because it is empty. 
+ 
+ 
+
+## Verbal Plasticity
+
+When you use the basic action “ click : Draw 1 card,” if it is the first time this turn you’ve done so, draw an extra card. 
+ 
+
+ 
+ 
+ 
+
+## Opening the Booster Pack
+
+Once you’ve played at least one game with the starter decks and feel ready to learn more, return to the STOP card and the cards behind it. There are 20 cards in the booster pack: 10 for you and 10 for the Corp. Shuffle your 10 bonus cards into your deck to make The Catalyst’s full deck! 
+
+The cards in the booster pack introduce a few more mechanics that will make your games more dynamic and exciting. 
+
+## Viruses
+
+ “I love viruses. Sure, it takes effort and care to get them to grow, but it's very rewarding when they do. And if they purge their systems? Well, I get to watch them grow all over again." 
+
+ 
+
+Two of your booster cards are special programs with the subtype VIRUS. These cards accumulate VIRUS COUNTERS based on certain conditions, which can then be spent or counted for useful effects. 
+
+In order to counter these building effects, the Corp has a basic action that removes all virus counters off of all virus cards in play: 
+
+ click click click : PURGE virus counters. 
+
+ 
+
+ Leech is a program that you use during encounters with ice, sort of like your icebreakers. Spending virus counters from Leech to bring the strength of a piece of ice down to one of your icebreakers can be a good way to save a few credits! 
+
+ 
+
+ Conduit is a powerful piece of access acceleration, similar to Jailbreak and Docklands Pass . If you can get this virus big enough, it can help you dig down deep into the Corp’s R&D for agendas. Remember the rules for accessing additional cards , which are further explained in the Run Timing Guide . 
+
+## Tags
+
+ "Rule one of running: don't let them track you back. Once they know where you live, who you are, you gotta move fast. Unless you like waking up to a bomb through your window." 
+
+ 
+
+The Corp has the ability to track hackers who aren’t careful enough. This is called TAGGING. The back of the STOP card is a tag tracker. Whether the Corp gives you a tag or you take one voluntarily, the effect is the same: place a counter on the tag tracker card. If you have at least one tag on the tag tracker, you are said to be TAGGED. 
+
+ 
+
+If you’re tagged, you have access to this basic action: 
+
+ click , 2 credit : Remove 1 tag. 
+
+While you are tagged, the Corp also has access to a new basic action: 
+
+ click , 2 credit : Trash 1 installed resource. 
+
+ 
+
+Additionally, the Corp can only use some of their especially nasty booster cards if you are tagged. Retribution , for example, can trash a program or a piece of hardware when the Corp normally only has the ability to trash your resources while you are tagged. The longer you wait to remove your tags, the longer it will take to shake them all and the riskier you’ll be running. 
+
+## Meat Damage
+
+One of the Corp’s booster cards introduces a second type of damage: MEAT DAMAGE. Regardless of the type of damage you take, the effect is the same: for each point of damage you must trash 1 card from your grip at random. Remember that if you would take more damage than you have cards in your grip, you flatline and lose the game. 
+
+ 
+
+ Orbital Superiority is a powerful agenda that you’ll need to watch out for. If the Corp can score it, you’ll take either a tag or, if you are already tagged, 4 meat damage all at once. 
+
+## Funhouse
+
+One of the Corp’s booster cards is the ice Funhouse , which has an ability that triggers when you encounter it. Before you have the chance to use your icebreakers, you will have to decide whether Funhouse ends the run or you take a tag. 
+
+ 
+
+## AMAZE Amusements
+
+One of the Corp’s booster cards has a “Persistent” ability on it. The ability on AMAZE Amusements always applies until the end of a run. You’ll have to take 2 tags when the run ends if you stole any agendas, even if you accessed and trashed AMAZE Amusements before accessing any agendas. 
+
+ 
+
+## What’s Next?
+
+After you’ve played as the Runner a few times, try switching sides with your opponent and seeing what the game is like from the Corp’s perspective. You may find that you enjoy playing Corp more than Runner, plus playing the Corp side can teach you how to be a better Runner player! 
+
+Once you’ve mastered all the cards the Starter Pack has to offer, you may have the itch for more Netrunner. After all, Netrunner is a deck-building game at its heart, so adding cards to your collection will allow you to experiment with new cards and playstyles. 
+
+There is a second pack of the System Gateway set called System Gateway: Deckbuilding Pack . In it you’ll find a ton more cards to swap into your decks, including new identity cards that can completely transform your game plan. 
+
+After you have a complete set of System Gateway , you can customize your decks even more with other NISEI products like System Update 2021 and the Ashes set of expansions. 
+
+NISEI is a labor of love, and we're honored to share our favorite game with you. Welcome to Netrunner, and remember: 
+
+Always Be Running. 
+
+## Appendix
+
+ System Gateway Runner Deck List 
+
+Use the list below to reassemble the System Gateway Starter Deck for the Runner. 
+
+## Starter Decks
+
+ 
+2× Tread Lightly 
+2× Creative Commission 
+2× VRcation 
+2× Overclock 
+3× Jailbreak 
+3× Sure Gamble 
+1× Docklands Pass 
+1× Pennyshaver 
+2× Cleaver 
+2× Carmen 
+2× Unity 
+2× Mayfly 
+1× Red Team 
+2× Telework Contract 
+2× Smartware Distributor 
+1× Verbal Plasticity 
+
+These cards are marked with circles on their bottom edges: 
+
+ 
+ 
+
+## Booster Pack
+
+ 
+2× Wildcat Strike 
+2× Mutual Favor 
+2× DZMZ Optimizer 
+2× Leech 
+2× Conduit 
+
+These cards are marked with crosses on their bottom edges:

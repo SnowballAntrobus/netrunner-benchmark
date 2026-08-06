@@ -1,0 +1,238 @@
+# Null Signal Games — Run Guide (run timing structure)
+# Source: https://nullsignal.games/players/learn-to-play/run-guide/
+# Retrieved: 2026-08-06
+# Copyright Null Signal Games; vendored for research use with attribution.
+
+## Learn to Play: Run Guide
+ 
+ 
+ 
+
+ 
+
+ Jericho’s avatar coils itself around my arm, squeezing gently. “How ya feeling?” 
+
+ I clutch my elbows. “Small.” 
+
+ “That’s only ‘cause you don’t know whatchu can do. C’mon, pick a server. One of the lighter ones, if you would.” 
+
+ I focus and feel a pulse of energy leave my feet. The darker shapes fade away, leaving behind a smattering of servers in white and pastels. I point to one that stood out, a squat dome, the color of moondust. 
+
+ “How about that one?” I ask, and the rest of the servers fade away, leaving the dome alone on a featureless black plane. 
+
+ “Perfect.” A black tongue forks out and back in. “Public utility. A good target for your first run.” 
+
+ “Why’s it good? Juicy target?” 
+
+ “Nah. Low risk, low reward. But probably won’t try to kill you out of the gate. Probably. Come on.” 
+
+ 
+
+Runs are the ones and zeros of Netrunner. They’re how the Runner accesses the Corp’s cards, both the ones they’ve committed to the table and the ones still hiding in central servers (HQ/hand, R&D/deck, and Archives/discard). Using ice, and sometimes assets and upgrades, runs are also the main point of interaction for the Corp to mess with the Runner’s stuff. 
+
+Running against a server involves the Runner progressing through the various positions of that server. Imagine that the base of the server and each piece of ice are physical locations that the Runner must traverse through. The Runner has to APPROACH and potentially ENCOUNTER each piece of ice, one at a time, and only after PASSING all of the ice can they look at the cards inside. Some players find it helpful to mark the Runner’s current position in a server with a token of some kind, such as a bead, chess piece, or other trinket. 
+
+If you get past all the ice protecting the server, they’ll be rewarded with a SUCCESSFUL run—including access to whatever is waiting at the end of the server. 
+
+There are six phases to a run: 
+
+ 
+Initiation Phase 
+Approach Ice Phase 
+Encounter Ice phase 
+Movement Phase 
+Success Phase 
+Run Ends Phase 
+
+## Initiation Phase
+
+ Jericho drops down and slithers to the foot of the dome. I follow gingerly behind. As we approach, the dome surface reveals itself to be translucent, inner workings projected on its surface: sparks, tracing unknown paths in the air; shapes, forever shifting in unknowable patterns. 
+
+ “What are those?” 
+
+ “Server signs. Gonna have to learn to read them. Tells you what’s inside before you run. See that? Two ice, outermost rezzed, off the shelf ice wall. That shifting pattern? Idling processor, nothing waiting at server root. About as basic as you can go.” 
+
+ I reach out to feel the keys of my console, and begin pulling up the programs Jericho dropped me. “Ice wall&#8230;so I just need to break through?” I assign the breaker to my gestural interface. 
+
+ I smile. “Let’s run.” 
+
+ 
+
+The first step of making a run is for the Runner to announce which server they are running against. A run can be initiated either via a basic action or with a card ability. Card abilities that initiate runs can limit the run to a specific server or change how the run resolves. 
+
+Once the target server is known, the Runner has to make their way toward the server. If there is ice protecting the server, the Runner APPROACHES the outermost piece of ice first. If there isn’t any ice protecting the server, then the run skips straight to the Movement Phase. 
+
+## Approach Ice Phase
+
+The only time the Corp can rez a piece of ice is while the Runner is approaching that ice. If the Corp decides to rez the ice the Runner is approaching, or if it is already rezzed, the Runner has to proceed to the Encountering Ice Phase against that ice. If the Corp declines to rez the ice, then the run skips straight to the Movement Phase. 
+
+Note: Ice stays installed no matter how many times the Runner approaches, encounters, or breaks it. If the Corp doesn’t rez it this time, they may change their mind the next time the Runner comes around. And once a piece of ice is rezzed, the Runner has to keep dealing with it each time they run against the server it’s protecting. 
+
+## Encounter Ice Phase
+
+ I push through the outer dome, and the sense of falling returns, but instead of falling down, I find myself falling forward through the infinite black plane. The virtual wind rips through my hair. Jericho has once more found a way to wrap his avatar around my upper arm. I feel free. 
+
+ The ice wall rapidly approaches, and I throw out my arm. The fracter materializes in my hand in a flash of orange light, and I swing it with all my might into the oncoming cold. It bites into the wall and jars my arm, and for a moment I worry that it isn’t enough. But there’s not enough time to worry, and I collide with the wall, chill seeping through my skin into my bones, but the moment passes, something gives, and I pass through, fragments of ice blowing past. 
+
+ I drop the fracter and pump my fist, giving out a whoop as the wall disappears behind me, leaving only me and the endless black plane. 
+
+ “Did you see that?” I turn to Jericho. A forked tongue greets me. “Got through clean!” 
+
+ “Nicely done. But don’t relax just yet.” 
+
+ 
+
+An encounter with a piece of ice is when that ice gets to shine. Ice always have an ordered list of abilities on them marked with the “ sub ” symbol. These are the bad things that the ice can do to the Runner. 
+
+Each “ sub ” ability is called a SUBROUTINE. At the end of an encounter with a piece of ice, the Corp resolves the subroutines on that ice one at a time in the order shown. 
+
+This is where icebreaker programs come in handy for the Runner because they have the ability to INTERFACE with ice. Interfacing with a piece of ice lets the Runner BREAK a subroutine, thus keeping it from resolving. 
+
+There are two requirements for the Runner to interface with a piece of ice. First, most icebreakers can only interface with ice of a specific subtype, as shown in the text of an icebreaker’s interface abilities. Second, an icebreaker can only interface with an ice if the icebreaker meets or beats the strength of the ice. 
+
+Both ice and icebreakers have a strength value shown in their bottom left corners. In addition to their interface abilities, icebreakers have abilities that let them increase their strength. In order to interface with the ice, the Runner needs enough credits to boost the strength of a relevant icebreaker and then use its interface ability. The cost to use an ability on an icebreaker is listed in the text before the colon. 
+
+After the Runner decides which, if any, subroutines they want to break, the Corp then resolves all of the subroutines that remain unbroken, in the order shown on the ice from top to bottom. If none of those subroutines end the run, then the run proceeds to the Movement Phase. 
+
+## Movement Phase
+
+ “I said two ice.” 
+
+ “Two?” 
+
+ Hands erupt from the ground, reaching to grab me. I jump to the side, trying to avoid their grasp, but the plane seems to wrap upwards, forming a tunnel, hands closing in from all sides. 
+
+ “What in the worlds?” I pull out the fracter again and try to bat them away, but there are too many hands, blows too futile. I hear an unfamiliar rasping sound, and I realize that it’s the Jericho snake, laughing. 
+
+ “First rule of running: be prepared!” 
+
+ The hands begin to grab onto my arms and legs. Their touch burns and tries to hold me back, but the inexorable forward fall rips me from their grasp. After what seems like forever, my leg is ripped from the grasp of the last hand, and I’m finally free. 
+
+ The plane lies empty before me, and I try to stop to rest, but I continue to stumble forward. “What the hell was that?” 
+
+ Jericho squeezes my arm twice. “A lesson. A disorientation layer. Don’t worry, not much lasting harm done.” 
+
+ “I feel terrible.” I continue to fall forward. 
+
+ “Better to learn the lesson. Don’t worry, that’s the last of ‘em. We’re through.” Jericho jabs his tail towards the horizon, and I follow his gaze. 
+
+ 
+
+Whenever the Runner gets past a position of the server—whether they skipped directly from the front of the server to its root, passed directly over an unrezzed piece of ice, or had to encounter a rezzed piece of ice—they have an opportunity to JACK OUT instead of continuing on to the next position of the server. Jacking out is choosing to end the run voluntarily. 
+
+If the Runner chooses not to jack out, it’s time for them to move to the next server position. If there is another piece of ice inward of their current position, they move to that piece of ice and return to the Approach Ice Phase. If the Runner just passed the innermost piece of ice between them and the server, then they APPROACH the server and make a successful run. 
+
+## Success Phase
+
+ Rows upon rows of perfectly aligned grey nodes, glowing packets of data flying between like hoppers between arcologies. I run into the matrix, and space seems to dilate. Soon, the data nodes extend in all directions, as far as the eye can see. 
+
+ “Not much time, but there should be a ransomware pack on the deck. Some new self-evolving stuff to get around filters.” 
+
+ I pull up the console window, and locate the package. I pull it out, and it sheaths my hand in a spiralling green aura. I reach out and brush my hand against the side of one of the nodes, and the aura is sucked into the node. The node gradually fades from grey to green, and, without warning, vines burst out of the node, each targeted in the direction of another node, and tiny, delicate flowers begin to bloom on the length of each. The newly-infected nodes begin to turn green. 
+
+ “Time to go.” Jericho says. I run towards the end of the matrix, the world foreshortens, and I find myself outside the dome, back in the net. The relentless falling stops. I reach back to the skulljack behind my neck, and look up to the sky. 
+
+ 
+
+If the Runner makes it past the ice to the base of the server, the run is declared SUCCESSFUL. Many card abilities care about the Runner making successful runs, and after resolving those abilities the Runner BREACHES the attacked server. 
+
+Breaching a server affords the Runner ACCESS to the cards associated with that server, one at a time. No matter which server is breached, the Runner gets to access all the cards installed in the root of that server. Breaching a central server also comes with some bonus accesses: 
+
+ 
+When the Runner breaches HQ, in addition to accessing the root of HQ, they get to access 1 card from the Corp’s hand at random. How the players randomize this access is up to them. The Runner could roll a die to determine which card to access, or the Corp could shuffle their hand and let the Runner point to a card. Either way, the card is revealed to both players for the Runner to access it. 
+When the Runner breaches R&D, in addition to accessing the root of R&D, they get to access 1 card from the top of the Corp’s deck. The Corp shows this card to the Runner without looking at it. 
+When the Runner breaches Archives, in addition to accessing the root of Archives, they get to access all of the cards in the Corp’s discard pile. Before they do so, the Corp has to turn all the facedown cards in Archives faceup. 
+
+Whenever the Runner breaches a server, they are required to access every card that they are allowed to, but they only access those cards one at a time in the order of their choice. For a remote server this is simple enough because all the cards the Runner gets to access are in the root of that remote server. They can simply tell the Corp which card they’d like to access next, resolve the access, then move on. For a central server, the Runner can decide to access all the cards in the root first, then a card from the central server, or vice versa. They can even intersperse accesses from the root and the central server. 
+
+Reminder: The Runner only accesses cards one at a time, so both players should make sure no more than one card is revealed at once. The Runner doesn’t get to know ahead of time which cards they’ll access, so they have to weigh their options with each card as they go. 
+
+## Accessing a Card
+
+Accessing a card means the Runner gets to look at it and potentially interact with it. If they access an operation or a piece of ice, nothing special happens, but now they potentially know some of what the Corp could be up to in the future. 
+
+If the Runner accesses an asset or an upgrade that isn’t already in Archives, they can choose to spend credits equal to the TRASH COST of the accessed card shown in the bottom right corner of the card. Paying the trash cost of an accessed card sends it to Archives faceup. 
+
+If the Runner accesses an agenda, they STEAL it and put it into their SCORE AREA. This is how the Runner acquires points to win the game. 
+
+If the Runner doesn’t trash or steal the card they access, simply return it where it was before they access the next card, if applicable. 
+
+Note: Some cards have abilities that trigger when the Runner accesses them. These cards instruct the Runner to reveal them, then the abilities resolve before the Runner accesses any other cards. These abilities are active even if the card is not rezzed. 
+
+## Accessing Additional Cards
+
+Some cards allow the Runner to access additional cards when breaching HQ or R&D. This works the same as before: the Runner gets to choose the order in which they access cards between the root and/or HQ and R&D, they can trash the extra cards they access if any of them have trash costs, and they steal the extra cards if any of them are agendas. 
+
+The big difference is that after accessing the first card from the central server, the Corp has to set it aside so that the Runner doesn’t accidentally access it a second time. If the Runner accesses more than one card from HQ, the Corp can simply place the first accessed card faceup on the table and offer the rest of HQ again for another random access. If the Runner accesses more than one card from R&D, they access cards from the top of R&D in order from the top down: the first access is the top card of R&D, and the second access is the card under that, and so on. 
+
+Reminder: Because the Runner has to access cards one at a time, they don’t get to know ahead of time which of the cards might be agendas or have trash costs. 
+
+After the entire breach ends, the Corp returns any cards accessed from HQ or R&D to the appropriate location. For R&D, the accessed cards need to go back on top of the Corp’s deck in the same order they were previously. 
+
+## Run Ends Phase
+
+ I come to, slumped against my cushion, back aching, arms tired, pounding headache, as if I just ran a marathon. Jericho’s face greets me, a smile a mile wide. 
+
+ “Great first run. Check your handiwork out.” He nods at the holo display, breaking news scrolling in the air. 
+
+ RANSOMWARE ATTACK ON KAGUYA SPACEPORT, ALL LAUNCHES POSTPONED 
+
+ “That’s me?” 
+
+ “Yup. That’s you. Don’t worry, they always pay up. Cheaper than spending a couple hours of time rooting it out. They’re still going to have to spend at least an hour realigning their schedule. There we are.” 
+
+ On cue, a large deposit is made to an anonymous account. Enough to refund the purchase of the console, and more. 
+
+ “Congratulations. Up for another?” 
+
+ You are not. It’s later than you expected, and you are completely wiped from the run. “Maybe tomorrow. And remind me to get some Diesel for next time.” 
+
+ “Sure thing, hotshot.” 
+
+ 
+
+If the Runner makes a successful run on a server, the run ends after they finish breaching that server. If the Runner jacks out or a piece of ice ends the run, then the run ends immediately without any other parts of the run resolving. When that happens, the run is considered UNSUCCESSFUL. 
+
+## Steps for Making a Run
+
+Here is a chart of the steps of the run described above, provided as a quick reference to the full details described above. 
+
+ 
+Initiation Phase 
+The Runner announces the attacked server. 
+Any “When a run begins…” abilities resolve. 
+Is there ice protecting the server? 
+YES: Continue to (2), with the Runner approaching the outermost piece of ice. 
+NO: Jump to (4). 
+Approach Ice Phase 
+Any “When the Runner approaches ice…” abilities resolve. 
+The Corp can rez non-ice cards and/or the ice the Runner is approaching. 
+Is the ice the Runner is approaching rezzed? 
+YES: Continue to (3). 
+NO: Jump to (4). 
+Encounter Ice Phase 
+Any “When the Runner encounters ice…” abilities resolve. 
+The Runner can use icebreakers to interact with the ice they are encountering, as well as other cards relevant to interacting with ice. 
+The Corp resolves the unbroken subroutines. 
+Did a subroutine end the run? 
+YES: Jump to (6). 
+NO: Continue to (4). 
+Movement Phase 
+Any “When the Runner passes ice…” abilities resolve. 
+Would the Runner like to jack out? 
+YES: Jump to (6). 
+NO: Continue to (c). 
+The Corp can rez non-ice cards. 
+Is there more ice between the Runner and the server? 
+YES: Return to (2), with the Runner approaching the next inward piece of ice. 
+NO: Continue to (e). 
+The Runner approaches the attacked server, and any “When the Runner approaches server…” abilities resolve. 
+Continue to (5). 
+Success Phase 
+The run is declared successful, and any “When the Runner makes a successful run…” abilities resolve. 
+The Runner breaches the attacked server. 
+Continue to (6). 
+End Phase 
+Did the Runner reach (5)? 
+YES: The run ends successfully. 
+NO: The run ends unsuccessfully.

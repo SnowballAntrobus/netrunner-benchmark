@@ -12,9 +12,12 @@
     "determinism": "tsx src/cli.ts determinism",
     "golden": "tsx src/cli.ts golden",
     "invariant": "tsx src/cli.ts invariant",
+    "llm-game": "tsx src/cli.ts llm-game",
+    "fetch-rules": "tsx src/cli.ts fetch-rules",
     "test": "npm run typecheck && npm run determinism -- --seed 7"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.115.0",
     "lz-string": "^1.5.0",
     "playwright": "^1.49.0"
   },

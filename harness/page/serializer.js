@@ -252,6 +252,11 @@
   }
 
   window.__harness.stateFor = stateFor;
+  // Card/option description helper for llmplayer.js — same PlayerCanLook
+  // honesty as the rest of the serializer.
+  window.__harness.cardEntry = function (card, side) {
+    return cardEntry(card, side === "corp" ? corp : runner);
+  };
 
   // ---- no-cheating invariant (&invariant=1) -------------------------------
 

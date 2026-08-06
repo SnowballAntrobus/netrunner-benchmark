@@ -5,6 +5,9 @@
  *    tsx src/cli.ts determinism [--seed N]   # same seed twice, logs must match
  *    tsx src/cli.ts golden record|check      # golden-log regression fixtures
  *    tsx src/cli.ts invariant [--seeds a,b,c] # no-cheating serializer check
+ *    tsx src/cli.ts llm-game [--model X|mock] [--rules official|digest]
+ *                   [--profile neutral|expert] [--reasoning brief|extended|scot|none] [--seed N] ...
+ *    tsx src/cli.ts fetch-rules              # snapshot NSG learn-to-play guides
  *
  *  Game records are written to harness/out/ as JSON; batch also writes a
  *  summary. Exit code is non-zero on any failed acceptance condition.
@@ -14,6 +17,8 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { launchBrowser, runGame, type GameRecord } from "./game.js";
 import { golden } from "./golden.js";
+import { runLLMGame } from "./llmgame.js";
+import { fetchRules } from "./rules.js";
 import { normalizeLog, firstDivergence } from "./log.js";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -97,6 +102,56 @@ if (command === "run-game") {
     }
   }
   process.exit(1);
+} else if (command === "llm-game") {
+  const model = arg("model", process.env["HARNESS_MODEL"] ?? "claude-haiku-4-5");
+  if (model !== "mock" && !process.env["ANTHROPIC_API_KEY"]) {
+    console.error("ANTHROPIC_API_KEY not set (use --model mock for the keyless path)");
+    process.exit(2);
+  }
+  const rulesSource = arg("rules", "official") === "digest" ? "digest" as const : "official" as const;
+  const reasoningArg = arg("reasoning", "brief");
+  const reasoningStyle =
+    reasoningArg === "extended" ? "extended" as const :
+    reasoningArg === "scot" ? "scot" as const :
+    reasoningArg === "none" ? "none" as const : "brief" as const;
+  const record = await runLLMGame({
+    repoRoot,
+    seed,
+    corpPrecon,
+    runnerPrecon,
+    model,
+    rulesSource,
+    profile: arg("profile", "neutral"),
+    reasoningStyle,
+    outDir,
+  });
+  console.log(summarize(record));
+  console.log(
+    `model=${record.model} rules=${record.rulesSource} profile=${record.promptProfile}/` +
+    `${record.reasoningStyle} llmDecisions=${record.llmDecisions} ` +
+    `rulesDecisions=${record.rulesDecisions} retries=${record.retriesTotal} ` +
+    `fallbacks=${record.fallbacks} invalidRecords=${record.invalidRecords}`
+  );
+  console.log(
+    `tokens in=${record.usage.tokensIn} out=${record.usage.tokensOut} ` +
+    `cacheRead=${record.usage.cacheRead} cacheWrite=${record.usage.cacheWrite}`
+  );
+  console.log(`decision log: ${record.decisionLogPath}`);
+  if (model === "mock") {
+    // CI acceptance: the mock injects one transient and one persistent
+    // malformed response — both paths must have been exercised.
+    const ok =
+      record.status === "completed" &&
+      record.invalidRecords === 0 &&
+      record.retriesTotal >= 1 &&
+      record.fallbacks >= 1;
+    console.log(ok ? "LLM-GAME (mock): PASS" : "LLM-GAME (mock): FAIL");
+    process.exit(ok ? 0 : 1);
+  }
+  process.exit(record.status === "completed" && record.invalidRecords === 0 ? 0 : 1);
+} else if (command === "fetch-rules") {
+  await fetchRules(repoRoot);
+  process.exit(0);
 } else if (command === "invariant") {
   const seeds = arg("seeds", "101,102,103,104,105").split(",").map((x) => parseInt(x, 10));
   const browser = await launchBrowser();
