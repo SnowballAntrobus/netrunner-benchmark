@@ -28,6 +28,8 @@ export interface GameRecord {
   runnerAgendaPoints: number | null;
   decisions: number;
   durationMs: number;
+  turns: { corp: number; runner: number } | null;
+  msPerTurn: number | null;
   errors: string[];
   log: string[];
   rngTrace?: number[]; // per-log-line Math.random draw counts (&rngtrace=1)
@@ -41,6 +43,7 @@ interface HarnessSurface {
   started: boolean;
   done: boolean;
   decisions: number;
+  turnCounts: { corp: number; runner: number };
   errors: string[];
   result: {
     winner: "corp" | "runner";
@@ -96,6 +99,8 @@ export async function runGame(options: GameOptions, browser?: Browser): Promise<
     runnerAgendaPoints: null,
     decisions: 0,
     durationMs: 0,
+    turns: null,
+    msPerTurn: null,
     errors: [],
     log: [],
   };
@@ -118,6 +123,7 @@ export async function runGame(options: GameOptions, browser?: Browser): Promise<
           started: h.started,
           done: h.done,
           decisions: h.decisions,
+          turnCounts: h.turnCounts,
           errors: h.errors,
           result: h.result,
         };
@@ -129,6 +135,7 @@ export async function runGame(options: GameOptions, browser?: Browser): Promise<
       }
       if (surface.done && surface.result) {
         record.status = "completed";
+        record.turns = surface.turnCounts;
         record.winner = surface.result.winner;
         record.reason = surface.result.reason;
         record.corpAgendaPoints = surface.result.corpAgendaPoints;
@@ -139,12 +146,14 @@ export async function runGame(options: GameOptions, browser?: Browser): Promise<
       }
       if (Date.now() - startedAt > timeoutMs) {
         record.status = "timeout";
+        record.turns = surface.turnCounts;
         record.decisions = surface.decisions;
         record.errors = surface.errors;
         break;
       }
       if (Date.now() - lastProgressAt > stallMs) {
         record.status = "stalled";
+        record.turns = surface.turnCounts;
         record.decisions = surface.decisions;
         record.errors = surface.errors;
         break;
@@ -191,6 +200,8 @@ export async function runGame(options: GameOptions, browser?: Browser): Promise<
     record.errors.push(`host: ${String(e)}`);
   } finally {
     record.durationMs = Date.now() - startedAt;
+    const totalTurns = record.turns ? record.turns.corp + record.turns.runner : 0;
+    record.msPerTurn = totalTurns > 0 ? Math.round(record.durationMs / totalTurns) : null;
     await context.close();
     if (ownBrowser) await activeBrowser.close();
     await staticServer.close();

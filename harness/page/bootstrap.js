@@ -87,6 +87,7 @@
   window.__harness.turn = null;
   window.__harness.turnMarkers = [];
   var turnCounts = { corp: 0, runner: 0 };
+  window.__harness.turnCounts = turnCounts; // live reference
   // Forward ALL arguments — ChangePhase(src, skipInit); dropping skipInit
   // makes DecisionPhase returns re-run Init forever (caught as a decision
   // storm: 93k decisions, game never ends).

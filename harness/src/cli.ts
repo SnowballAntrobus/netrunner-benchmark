@@ -34,9 +34,13 @@ function arg(name: string, fallback: string): string {
 
 function summarize(r: GameRecord): string {
   const score = `${r.corpAgendaPoints ?? "-"}:${r.runnerAgendaPoints ?? "-"} (corp:runner AP)`;
+  const turns = r.turns
+    ? `turns=${r.turns.corp}c/${r.turns.runner}r` +
+      (r.msPerTurn !== null ? ` (~${(r.msPerTurn / 1000).toFixed(1)}s/turn)` : "")
+    : "turns=-";
   return (
     `seed=${r.seed} status=${r.status} winner=${r.winner ?? "-"} ` +
-    `reason="${r.reason ?? "-"}" ${score} decisions=${r.decisions} ` +
+    `reason="${r.reason ?? "-"}" ${score} ${turns} decisions=${r.decisions} ` +
     `log=${r.log.length} lines errors=${r.errors.length} ${(r.durationMs / 1000).toFixed(1)}s`
   );
 }

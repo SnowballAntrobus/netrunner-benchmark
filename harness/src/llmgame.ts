@@ -125,6 +125,8 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
     runnerAgendaPoints: null,
     decisions: 0,
     durationMs: 0,
+    turns: null,
+    msPerTurn: null,
     errors: [],
     log: [],
     model,
@@ -238,6 +240,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
             __harness: {
               done: boolean;
               decisions: number;
+              turnCounts: { corp: number; runner: number };
               errors: string[];
               result: {
                 winner: "corp" | "runner";
@@ -251,12 +254,14 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
         return {
           done: h.done,
           decisions: h.decisions,
+          turnCounts: h.turnCounts,
           errors: h.errors,
           result: h.result,
         };
       })) as {
         done: boolean;
         decisions: number;
+        turnCounts: { corp: number; runner: number };
         errors: string[];
         result: {
           winner: "corp" | "runner";
@@ -271,6 +276,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
       }
       if (surface.done && surface.result) {
         record.status = "completed";
+        record.turns = surface.turnCounts;
         record.winner = surface.result.winner;
         record.reason = surface.result.reason;
         record.corpAgendaPoints = surface.result.corpAgendaPoints;
@@ -281,12 +287,14 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
       }
       if (Date.now() - startedAt > timeoutMs) {
         record.status = "timeout";
+        record.turns = surface.turnCounts;
         record.decisions = surface.decisions;
         record.errors.push(...surface.errors);
         break;
       }
       if (Date.now() - lastProgressAt > stallMs) {
         record.status = "stalled";
+        record.turns = surface.turnCounts;
         record.decisions = surface.decisions;
         record.errors.push(...surface.errors);
         break;
@@ -304,6 +312,8 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
     record.errors.push(`host: ${String(e)}`);
   } finally {
     record.durationMs = Date.now() - startedAt;
+    const totalTurns = record.turns ? record.turns.corp + record.turns.runner : 0;
+    record.msPerTurn = totalTurns > 0 ? Math.round(record.durationMs / totalTurns) : null;
     await context.close();
     await browser.close();
     await staticServer.close();
