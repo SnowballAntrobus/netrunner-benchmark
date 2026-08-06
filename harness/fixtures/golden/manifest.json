@@ -1,0 +1,15 @@
+{
+  "comment": "Golden-log regression fixtures (PHASE1 M2). Each entry is a seeded rules-AI vs rules-AI game; fixtures freeze the normalized log and result. Re-bless after intentional engine-affecting changes with: npm run golden -- record",
+  "games": [
+    { "id": "g01", "seed": 101, "corp": "Gateway Corp", "runner": "Gateway Runner" },
+    { "id": "g02", "seed": 102, "corp": "Advancement Factory", "runner": "No Walls" },
+    { "id": "g03", "seed": 103, "corp": "High Stakes", "runner": "The Magic Hat" },
+    { "id": "g04", "seed": 104, "corp": "Lucrative Assets", "runner": "Customs Duties" },
+    { "id": "g05", "seed": 105, "corp": "Rushed Launch", "runner": "Open Gateway" },
+    { "id": "g06", "seed": 106, "corp": "Spike or Strike", "runner": "Fight or Flight" },
+    { "id": "g07", "seed": 107, "corp": "Tag Business", "runner": "The Long Con" },
+    { "id": "g08", "seed": 108, "corp": "Thorny Grid", "runner": "Trash King" },
+    { "id": "g09", "seed": 109, "corp": "Wintermute", "runner": "The Well-Paced Speedrunner" },
+    { "id": "g10", "seed": 110, "corp": "SG-SU21 Boss", "runner": "Server Restructuring" }
+  ]
+}

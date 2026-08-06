@@ -3,6 +3,7 @@
  *    tsx src/cli.ts run-game    [--seed N] [--corp "Gateway Corp"] [--runner "Gateway Runner"]
  *    tsx src/cli.ts batch       [--games N] [--seed N] [--corp ...] [--runner ...]
  *    tsx src/cli.ts determinism [--seed N]   # same seed twice, logs must match
+ *    tsx src/cli.ts golden record|check      # golden-log regression fixtures
  *
  *  Game records are written to harness/out/ as JSON; batch also writes a
  *  summary. Exit code is non-zero on any failed acceptance condition.
@@ -11,6 +12,8 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { launchBrowser, runGame, type GameRecord } from "./game.js";
+import { golden } from "./golden.js";
+import { normalizeLog, firstDivergence } from "./log.js";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const outDir = join(repoRoot, "harness", "out");
@@ -72,13 +75,10 @@ if (command === "run-game") {
   console.log("run 2:", summarize(second));
   await save(`determinism-${seed}-a.json`, first);
   await save(`determinism-${seed}-b.json`, second);
-  // The engine logs wall-clock diagnostics (e.g. RunCalculator "execution
-  // time of NNN ms") that vary between behaviorally identical runs;
-  // normalize them before comparing. Raw logs are preserved in out/.
-  const normalize = (lines: string[]): string[] =>
-    lines.map((line) => line.replace(/\d+ ms/g, "N ms"));
-  const firstLog = normalize(first.log);
-  const secondLog = normalize(second.log);
+  // Comparison happens on normalized lines (see src/log.ts); raw logs are
+  // preserved in out/.
+  const firstLog = normalizeLog(first.log);
+  const secondLog = normalizeLog(second.log);
   const identical =
     first.status === "completed" &&
     second.status === "completed" &&
@@ -88,18 +88,17 @@ if (command === "run-game") {
     process.exit(0);
   }
   if (first.status === "completed" && second.status === "completed") {
-    const a = firstLog;
-    const b = secondLog;
-    for (let i = 0; i < Math.max(a.length, b.length); i++) {
-      if (a[i] !== b[i]) {
-        console.log(`NON-DETERMINISTIC: logs diverge at line ${i}:`);
-        console.log(`  run 1: ${a[i] ?? "<end>"}`);
-        console.log(`  run 2: ${b[i] ?? "<end>"}`);
-        break;
-      }
+    const i = firstDivergence(firstLog, secondLog);
+    if (i !== -1) {
+      console.log(`NON-DETERMINISTIC: logs diverge at line ${i}:`);
+      console.log(`  run 1: ${firstLog[i] ?? "<end>"}`);
+      console.log(`  run 2: ${secondLog[i] ?? "<end>"}`);
     }
   }
   process.exit(1);
+} else if (command === "golden") {
+  const mode = process.argv[3] === "record" ? "record" as const : "check" as const;
+  process.exit(await golden(repoRoot, mode));
 } else {
   console.error(`unknown command: ${command}`);
   process.exit(2);

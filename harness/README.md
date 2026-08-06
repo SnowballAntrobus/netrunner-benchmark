@@ -19,8 +19,13 @@ npx playwright install chromium   # if no local Chromium is found
 npm run run-game -- --seed 7                  # one game, result + log to out/
 npm run batch -- --games 10 --seed 1          # seeds 1..10, summary to out/
 npm run determinism -- --seed 7               # same seed twice, logs must match
+npm run golden -- check                       # replay golden fixtures, diff logs
+npm run golden -- record                      # re-bless fixtures after intended changes
 npm test                                      # typecheck + determinism
 ```
+
+The golden suite (`fixtures/golden/`) is the regression net for any
+engine-affecting change — CI runs it on every push; see docs/ENGINE.md.
 
 Decks default to the System Gateway precons (`--corp "Gateway Corp"`,
 `--runner "Gateway Runner"`); any file name from `precons/` works.

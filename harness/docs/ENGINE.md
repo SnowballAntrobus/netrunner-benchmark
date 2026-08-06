@@ -36,7 +36,11 @@ bootstrap.js) while making seeded runs reproducible. Determinism is verified
 in CI by `cli.ts determinism`, which plays the same seed twice and diffs logs.
 
 1. **Engine LCG** — `command.js` `var rand = LCG()` self-seeds from
-   `Math.random` at load. Bootstrap rebinds `rand = LCG(seed + 1)`.
+   `Math.random` at load. Bootstrap rebinds `rand = LCG(seed + 1)` as
+   belt-and-braces, but note `rand()` has no call sites in gameplay code —
+   all game randomness flows through `Math.random` (verified by the golden
+   suite's negative test: perturbing the LCG seed changes nothing;
+   perturbing the seedrandom seed fails every fixture).
 2. **`Math.random`** — used by `RandomRange()` (all shuffles), the Runner
    AI's decision jitter (`ai_runner.js:2193`), and three card-AI call sites.
    Bootstrap seeds it via the engine's own bundled seedrandom.
@@ -60,6 +64,16 @@ in CI by `cli.ts determinism`, which plays the same seed twice and diffs logs.
    re-entered from `SpeechSynthesisUtterance.onend`, which never fires
    headless (stall, not nondeterminism — noted here because it must stay
    disabled). Bootstrap unchecks `#narration`.
+
+## Golden-log fixtures (M2)
+
+`fixtures/golden/manifest.json` defines 10 seeded matchups covering all
+eight Quick-Game corp decks (all four factions), the Gateway teaching pair,
+and the SG-SU21 Boss deck; outcomes include agenda wins for both sides and
+two flatlines. `npm run golden -- check` replays them and diffs normalized
+logs + results against the frozen fixtures; `npm run golden -- record`
+re-blesses after an intentional behavioral change. Sensitivity was verified
+by perturbation (see ledger item 1).
 
 ## Browser dependencies observed (for a future Node/jsdom host)
 

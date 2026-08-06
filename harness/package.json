@@ -10,6 +10,7 @@
     "run-game": "tsx src/cli.ts run-game",
     "batch": "tsx src/cli.ts batch",
     "determinism": "tsx src/cli.ts determinism",
+    "golden": "tsx src/cli.ts golden",
     "test": "npm run typecheck && npm run determinism -- --seed 7"
   },
   "dependencies": {
