@@ -155,19 +155,32 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
   const browser = await launchBrowser();
   const context = await browser.newContext();
   const page = await context.newPage();
+  // Set when the API is unusable (bad key, quota, network): the game must
+  // ABORT, not degrade into option-0 fallback play — a game played by
+  // fallbacks is worthless data. (Found via fake-key probe: 460 silent
+  // bridge failures produced a "completed" game.)
+  let apiAborted = false;
 
   try {
     // LLM decision bridge — called by page/llmplayer.js for every Runner decision.
     await page.exposeFunction("__harnessDecide", async (requestJson: string) => {
       const request = JSON.parse(requestJson) as PageDecisionRequest;
+      if (apiAborted) return JSON.stringify({ option: 0, abort: true });
       record.llmDecisions++;
-      const result = await decideWithRetries(
+      let result;
+      try {
+        result = await decideWithRetries(
         client,
         system,
         buildDecisionMessage(request),
-        record.llmDecisions,
-        request.options.length
-      );
+          record.llmDecisions,
+          request.options.length
+        );
+      } catch (e) {
+        apiAborted = true;
+        record.errors.push(`API failure at decision ${request.seq}: ${String(e)}`);
+        return JSON.stringify({ option: 0, abort: true });
+      }
       record.retriesTotal += result.retries;
       if (result.fallback) record.fallbacks++;
       record.usage.tokensIn += result.usage.tokensIn;
@@ -273,6 +286,13 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
       if (surface.decisions !== lastDecisions) {
         lastDecisions = surface.decisions;
         lastProgressAt = Date.now();
+      }
+      if (apiAborted) {
+        record.status = "crashed";
+        record.turns = surface.turnCounts;
+        record.decisions = surface.decisions;
+        record.errors.push(...surface.errors);
+        break;
       }
       if (surface.done && surface.result) {
         record.status = "completed";

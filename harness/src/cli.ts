@@ -13,7 +13,7 @@
  *  Game records are written to harness/out/ as JSON; batch also writes a
  *  summary. Exit code is non-zero on any failed acceptance condition.
  */
-import { mkdir, writeFile } from "node:fs/promises";
+import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { launchBrowser, runGame, type GameRecord } from "./game.js";
@@ -25,6 +25,24 @@ import { normalizeLog, firstDivergence } from "./log.js";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const outDir = join(repoRoot, "harness", "out");
+
+// Minimal .env support (harness/.env, KEY=VALUE lines, # comments).
+// Existing environment variables take precedence. The file is gitignored —
+// it exists so API keys never touch the shell history or the repo.
+try {
+  const envFile = await readFile(join(repoRoot, "harness", ".env"), "utf-8");
+  for (const rawLine of envFile.split("\n")) {
+    const line = rawLine.trim();
+    if (line === "" || line.startsWith("#")) continue;
+    const eq = line.indexOf("=");
+    if (eq === -1) continue;
+    const key = line.slice(0, eq).trim();
+    const value = line.slice(eq + 1).trim().replace(/^["']|["']$/g, "");
+    if (process.env[key] === undefined) process.env[key] = value;
+  }
+} catch {
+  /* no .env — fine */
+}
 
 function arg(name: string, fallback: string): string {
   const i = process.argv.indexOf(`--${name}`);

@@ -115,6 +115,13 @@
       .__harnessDecide(JSON.stringify(request))
       .then(function (responseJson) {
         var response = JSON.parse(responseJson);
+        if (response.abort) {
+          // Host declared the API unusable: freeze the game loop rather
+          // than play on with meaningless fallback choices.
+          pauseFaceoff = true;
+          window.__harness.errors.push("llmplayer: host aborted (API failure)");
+          return 0;
+        }
         var idx = response.option;
         if (typeof idx !== "number" || idx < 0 || idx >= optionList.length) {
           window.__harness.errors.push(
