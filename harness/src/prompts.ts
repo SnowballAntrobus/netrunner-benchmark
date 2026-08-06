@@ -137,6 +137,21 @@ Decision types:
 Multi-step actions arrive as chains: e.g. command "run" then select the
 server. Your state JSON shows "run" context while a run is in progress.
 
+Notation: card text and log lines use bracket icons: [c] = credit,
+[click] = click, [sub] = subroutine, [mu] = memory unit, [trash] = trash
+symbol, [recurring] = recurring credit. Three state terms not covered by
+the learn-to-play guides, per the Comprehensive Rules (v26.03): "core
+damage" — suffered like other damage (1 random card trashed from your
+grip per point) and each core damage also reduces your maximum hand size
+by 1 for the rest of the game; you are flatlined if damage exceeds cards
+in grip, or at your discard step if your maximum hand size is below 0
+(CR 10.4, 1.7.2b). "bad publicity" — when you initiate a run you gain 1
+bad publicity credit per bad publicity the Corp has, spendable only
+during that run; unspent ones are lost when the run ends (CR 10.6,
+6.3.3). "link" — your link strength opposes the Corp's trace strength
+when a trace attempt resolves; if trace strength exceeds link strength
+the trace succeeds (CR 10.7, 10.8).
+
 Respond ONLY via the choose_option tool. Write the "reasoning" field
 FIRST, then the "option" index — your reasoning should produce the choice,
 not justify it afterwards.

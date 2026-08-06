@@ -17,7 +17,12 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 
-export const RULES_SOURCES: { file: string; url: string; label: string }[] = [
+export const RULES_SOURCES: {
+  file: string;
+  url: string;
+  label: string;
+  promptInclude?: boolean; // false = reference snapshot only (judge/skill use)
+}[] = [
   {
     file: "learn-to-play-runner.txt",
     url: "https://nullsignal.games/players/learn-to-play/learn-to-play-runner/",
@@ -32,6 +37,15 @@ export const RULES_SOURCES: { file: string; url: string; label: string }[] = [
     file: "run-guide.txt",
     url: "https://nullsignal.games/players/learn-to-play/run-guide/",
     label: "Null Signal Games — Run Guide (run timing structure)",
+  },
+  {
+    // Reference for the judge tiers and for deriving definitions the LtP
+    // guides don't cover (core damage, bad publicity, link) — NOT included
+    // in the system prompt (too large; the LtP guides are the play rules).
+    file: "comprehensive-rules.txt",
+    url: "https://rules.nullsignal.games/",
+    label: "Null Signal Games — Netrunner Comprehensive Rules",
+    promptInclude: false,
   },
 ];
 
@@ -93,7 +107,7 @@ export async function fetchRules(repoRoot: string): Promise<void> {
 export async function loadOfficialRules(repoRoot: string): Promise<string> {
   const dir = join(repoRoot, "harness", "rules");
   const parts: string[] = [];
-  for (const source of RULES_SOURCES) {
+  for (const source of RULES_SOURCES.filter((s) => s.promptInclude !== false)) {
     try {
       parts.push(await readFile(join(dir, source.file), "utf-8"));
     } catch {

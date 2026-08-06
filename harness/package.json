@@ -14,6 +14,7 @@
     "invariant": "tsx src/cli.ts invariant",
     "llm-game": "tsx src/cli.ts llm-game",
     "fetch-rules": "tsx src/cli.ts fetch-rules",
+    "audit": "tsx src/cli.ts audit",
     "test": "npm run typecheck && npm run determinism -- --seed 7"
   },
   "dependencies": {

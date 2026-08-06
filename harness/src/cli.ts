@@ -8,6 +8,7 @@
  *    tsx src/cli.ts llm-game [--model X|mock] [--rules official|digest]
  *                   [--profile neutral|expert] [--reasoning brief|extended|scot|none] [--seed N] ...
  *    tsx src/cli.ts fetch-rules              # snapshot NSG learn-to-play guides
+ *    tsx src/cli.ts audit [--file <game.json>] # conservation audit (default: golden fixtures)
  *
  *  Game records are written to harness/out/ as JSON; batch also writes a
  *  summary. Exit code is non-zero on any failed acceptance condition.
@@ -19,6 +20,7 @@ import { launchBrowser, runGame, type GameRecord } from "./game.js";
 import { golden } from "./golden.js";
 import { runLLMGame } from "./llmgame.js";
 import { fetchRules } from "./rules.js";
+import { auditGolden, auditFile, reportAudit } from "./audit.js";
 import { normalizeLog, firstDivergence } from "./log.js";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -149,6 +151,10 @@ if (command === "run-game") {
     process.exit(ok ? 0 : 1);
   }
   process.exit(record.status === "completed" && record.invalidRecords === 0 ? 0 : 1);
+} else if (command === "audit") {
+  const file = arg("file", "");
+  const results = file ? [await auditFile(repoRoot, file)] : await auditGolden(repoRoot);
+  process.exit(reportAudit(results));
 } else if (command === "fetch-rules") {
   await fetchRules(repoRoot);
   process.exit(0);

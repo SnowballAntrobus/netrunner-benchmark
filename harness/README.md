@@ -30,6 +30,8 @@ npm run llm-game -- --seed 7                  # Claude as Runner (needs ANTHROPI
                                               # prompt knobs: --profile neutral|expert,
                                               #   --reasoning brief|extended|none
                                               #   (see docs/PROMPTING.md)
+npm run audit                                 # conservation audit over golden fixtures
+npm run audit -- --file out/<game>.json       # audit any game record
 npm test                                      # typecheck + determinism
 ```
 

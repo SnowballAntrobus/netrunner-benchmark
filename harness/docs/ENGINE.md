@@ -146,6 +146,22 @@ stream is host-side analysis data, never shown to the LLM). Both
 decklists are granted to the LLM in the system prompt (open decklists) —
 a deliberate prompt-layer grant, distinct from serializer honesty.
 
+## Conservation auditor (M4.5 — judge tier one)
+
+`npm run audit` replays game logs maintaining independent credit and
+click ledgers from narrated events, reconciled against the engine's own
+omniscient SPOILER snapshots at every turn boundary (ledgers resync after
+each checkpoint so one gap cannot cascade). Event semantics were verified
+against mechanics.js — notably: "gained N credits FROM x" and card-sourced
+spends are temporary/card credits, not pool; "taken from <card>" is a pool
+gain attributed via the card's side. Unknown credit-shaped lines are
+failures, forcing parser coverage of the card pool. Baseline: all 10
+golden fixtures + sample LLM games pass (~600 credit checkpoints, ~300
+click turns, zero mismatches); a planted-corruption negative test
+confirms sensitivity. Runs in CI. Tier two (qualitative timing/ruling
+review) is the Claude Desktop audit skill; tier three (API-credit LLM
+judge over ReproductionCode positions) is deferred.
+
 ## Browser dependencies observed (for a future Node/jsdom host)
 
 Running the engine outside a real browser will need at minimum: jQuery
