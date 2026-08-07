@@ -12,11 +12,13 @@ import { loadCardData, deckReference } from "./carddata.js";
 import {
   buildSystemPrompt,
   buildDecisionMessage,
+  buildLeanDecisionMessage,
+  buildCompactionNotice,
   PROFILES,
   type PageDecisionRequest,
   type PromptProfile,
 } from "./prompts.js";
-import { makeClient, decideWithRetries, type Usage } from "./llm.js";
+import { makeClient, decideWithRetries, Transcript, type Usage } from "./llm.js";
 import { loadOfficialRules } from "./rules.js";
 
 export interface LLMGameOptions {
@@ -31,11 +33,29 @@ export interface LLMGameOptions {
   outDir: string;
   timeoutMs?: number;
   stallMs?: number;
+  /** D01: "conversational" (default) keeps the whole game in one running
+   *  conversation; "stateless" is the game-1 ablation arm. */
+  contextMode?: "conversational" | "stateless";
+  /** D01 axis 1: what a PAST turn keeps in the transcript. "full" (default,
+   *  variant A) = the complete decision message; "lean" (variant B) =
+   *  header + options only. */
+  historyVariant?: "full" | "lean";
+  /** Compact when the observed request size crosses this (tokens). A
+   *  PER-MODEL tuning knob: pick ~70–80% of the model's context window,
+   *  floored by post-compaction baseline + epoch headroom (see
+   *  PROMPTING.md "Choosing the threshold"). Default 150K for
+   *  200K-window models (haiku) — matches Anthropic's own API compaction
+   *  trigger default and the practitioner quality band. */
+  compactionThreshold?: number;
+  /** Exchanges kept verbatim through a compaction reset. */
+  compactionKeepTurns?: number;
 }
 
 export interface DecisionRecord {
+  record_type?: "decision"; // absent in game-1 records; readers tolerate both
   game_id: string;
   seq: number;
+  log_index: number | null; // capturedLog.length at capture time (exact ordering)
   turn: { side: string; number: number } | null;
   phase: { identifier: string; title: string } | null;
   seat: string;
@@ -53,6 +73,33 @@ export interface DecisionRecord {
   cache_read: number | null;
   latency_ms: number | null;
   reproduction_code: string | null;
+  /** D01: observed request size (system + transcript + decision) for this
+   *  decision; null for corp records and stateless mode. */
+  transcript_tokens: number | null;
+  /** D01: compaction epoch this decision was made in (0 = before the first
+   *  compaction); null when stateless. */
+  compaction_id: number | null;
+}
+
+/** D01: compaction events are first-class records in the same JSONL stream —
+ *  the summary text is the model's only memory of everything dropped, and
+ *  the first place to look when a later confabulation needs tracing. */
+export interface CompactionRecord {
+  record_type: "compaction";
+  game_id: string;
+  compaction_id: number; // 1-based
+  seq_before: number; // seq of the decision whose arrival triggered it
+  log_index: number | null;
+  turn: { side: string; number: number } | null;
+  transcript_tokens_before: number | null;
+  dropped_turns: number; // exchanges compacted into the summary
+  kept_turns: number; // exchanges kept verbatim
+  summary: string;
+  model: string;
+  tokens_in: number;
+  tokens_out: number;
+  cache_read: number;
+  latency_ms: number;
 }
 
 export interface LLMGameRecord extends GameRecord {
@@ -60,10 +107,14 @@ export interface LLMGameRecord extends GameRecord {
   rulesSource: string;
   promptProfile: string;
   reasoningStyle: string;
+  contextMode: "conversational" | "stateless";
+  historyVariant: "full" | "lean" | null; // null when stateless
   llmDecisions: number;
   rulesDecisions: number;
   retriesTotal: number;
   fallbacks: number;
+  compactions: number;
+  transcriptTokensMax: number;
   usage: Usage;
   decisionLogPath: string;
   invalidRecords: number;
@@ -88,6 +139,10 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
   const { repoRoot, seed, corpPrecon, runnerPrecon, model, outDir } = options;
   const timeoutMs = options.timeoutMs ?? 7_200_000;
   const stallMs = options.stallMs ?? 300_000;
+  const contextMode = options.contextMode ?? "conversational";
+  const historyVariant = options.historyVariant ?? "full";
+  const compactionThreshold = options.compactionThreshold ?? 150_000;
+  const compactionKeepTurns = options.compactionKeepTurns ?? 20;
   const startedAt = Date.now();
   const gameId = `llm-${model.replace(/[^a-z0-9.-]/gi, "_")}-s${seed}-${startedAt}`;
 
@@ -105,9 +160,14 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
     deckReference("Your deck (Runner)", runnerDeck, cardData),
     deckReference("Corp deck (opponent)", corpDeck, cardData),
     rulesText,
-    profile
+    profile,
+    contextMode
   );
   const client = makeClient(model, seed, options.reasoningStyle === "extended" ? 2048 : 1024);
+  const transcript =
+    contextMode === "conversational"
+      ? new Transcript(compactionThreshold, compactionKeepTurns)
+      : null;
 
   await mkdir(outDir, { recursive: true });
   const decisionLogPath = join(outDir, `${gameId}.jsonl`);
@@ -133,10 +193,14 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
     rulesSource: options.rulesSource,
     promptProfile: options.profile,
     reasoningStyle: options.reasoningStyle,
+    contextMode,
+    historyVariant: contextMode === "conversational" ? historyVariant : null,
     llmDecisions: 0,
     rulesDecisions: 0,
     retriesTotal: 0,
     fallbacks: 0,
+    compactions: 0,
+    transcriptTokensMax: 0,
     usage: { tokensIn: 0, tokensOut: 0, cacheRead: 0, cacheWrite: 0 },
     decisionLogPath,
     invalidRecords: 0,
@@ -167,12 +231,57 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
       const request = JSON.parse(requestJson) as PageDecisionRequest;
       if (apiAborted) return JSON.stringify({ option: 0, abort: true });
       record.llmDecisions++;
+
+      // D01 compaction: checked BEFORE the decision, on the request size
+      // observed at the PREVIOUS decision (threshold < window leaves
+      // headroom). The model writes its own summary; the transcript
+      // restarts as [notice] + [summary] + [last K exchanges verbatim].
+      if (transcript && transcript.shouldCompact()) {
+        try {
+          const summary = await client.summarize(system, [
+            ...transcript.messages(),
+            { role: "user", content: buildCompactionNotice(transcript.keepPairs) },
+          ]);
+          const tokensBefore = transcript.promptTokens;
+          const { droppedPairs, keptPairs } = transcript.compact(summary.text);
+          record.compactions++;
+          const compactionRecord: CompactionRecord = {
+            record_type: "compaction",
+            game_id: gameId,
+            compaction_id: transcript.compactions,
+            seq_before: request.seq,
+            log_index: (request as { logIndex?: number | null }).logIndex ?? null,
+            turn: request.turn,
+            transcript_tokens_before: tokensBefore,
+            dropped_turns: droppedPairs,
+            kept_turns: keptPairs,
+            summary: summary.text,
+            model,
+            tokens_in: summary.usage.tokensIn,
+            tokens_out: summary.usage.tokensOut,
+            cache_read: summary.usage.cacheRead,
+            latency_ms: summary.latencyMs,
+          };
+          record.usage.tokensIn += summary.usage.tokensIn;
+          record.usage.tokensOut += summary.usage.tokensOut;
+          record.usage.cacheRead += summary.usage.cacheRead;
+          record.usage.cacheWrite += summary.usage.cacheWrite;
+          await appendFile(decisionLogPath, JSON.stringify(compactionRecord) + "\n");
+        } catch (e) {
+          apiAborted = true;
+          record.errors.push(`API failure at compaction (seq ${request.seq}): ${String(e)}`);
+          return JSON.stringify({ option: 0, abort: true });
+        }
+      }
+
+      const decisionMessage = buildDecisionMessage(request);
       let result;
       try {
         result = await decideWithRetries(
-        client,
-        system,
-        buildDecisionMessage(request),
+          client,
+          system,
+          transcript ? transcript.messages() : [],
+          decisionMessage,
           record.llmDecisions,
           request.options.length
         );
@@ -181,6 +290,19 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
         record.errors.push(`API failure at decision ${request.seq}: ${String(e)}`);
         return JSON.stringify({ option: 0, abort: true });
       }
+      if (transcript) {
+        // Only the final accepted exchange enters the transcript; retries
+        // stay inside the decision. Under "lean", the persisted user turn
+        // drops state+log (the fresh state was still SENT this decision).
+        transcript.append(
+          historyVariant === "lean" ? buildLeanDecisionMessage(request) : decisionMessage,
+          result.raw || "(empty)"
+        );
+        transcript.notePromptTokens(result.promptTokens);
+        if (result.promptTokens > record.transcriptTokensMax) {
+          record.transcriptTokensMax = result.promptTokens;
+        }
+      }
       record.retriesTotal += result.retries;
       if (result.fallback) record.fallbacks++;
       record.usage.tokensIn += result.usage.tokensIn;
@@ -188,8 +310,10 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
       record.usage.cacheRead += result.usage.cacheRead;
       record.usage.cacheWrite += result.usage.cacheWrite;
       await writeDecision({
+        record_type: "decision",
         game_id: gameId,
         seq: request.seq,
+        log_index: (request as { logIndex?: number | null }).logIndex ?? null,
         turn: request.turn,
         phase: request.phase,
         seat: "runner",
@@ -207,6 +331,8 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
         cache_read: result.usage.cacheRead,
         latency_ms: result.latencyMs,
         reproduction_code: request.reproductionCode,
+        transcript_tokens: transcript ? result.promptTokens : null,
+        compaction_id: transcript ? transcript.compactions : null,
       });
       return JSON.stringify({ option: result.option });
     });
@@ -216,8 +342,10 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
       const r = JSON.parse(recordJson) as PageDecisionRequest & { choice: number };
       record.rulesDecisions++;
       await writeDecision({
+        record_type: "decision",
         game_id: gameId,
         seq: r.seq,
+        log_index: (r as { logIndex?: number | null }).logIndex ?? null,
         turn: r.turn,
         phase: r.phase,
         seat: "corp",
@@ -235,6 +363,8 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
         cache_read: null,
         latency_ms: null,
         reproduction_code: r.reproductionCode,
+        transcript_tokens: null,
+        compaction_id: null,
       });
     });
 

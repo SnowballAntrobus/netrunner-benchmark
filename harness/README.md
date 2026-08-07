@@ -29,9 +29,16 @@ npm run llm-game -- --seed 7                  # Claude as Runner (needs ANTHROPI
                                               #   default claude-haiku-4-5)
                                               # prompt knobs: --profile neutral|expert,
                                               #   --reasoning brief|extended|none
+                                              # context knobs (D01): --context
+                                              #   conversational|stateless (default
+                                              #   conversational), --history full|lean,
+                                              #   --compact-threshold N, --compact-keep N
                                               #   (see docs/PROMPTING.md)
 npm run audit                                 # conservation audit over golden fixtures
 npm run audit -- --file out/<game>.json       # audit any game record
+npm run format -- --file out/<game>.json      # markdown narratives: .report.md (review
+                                              #   copy, forced decisions collapsed) and
+                                              #   .full.md (every decision + options)
 npm test                                      # typecheck + determinism
 ```
 

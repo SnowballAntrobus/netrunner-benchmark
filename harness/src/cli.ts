@@ -6,9 +6,12 @@
  *    tsx src/cli.ts golden record|check      # golden-log regression fixtures
  *    tsx src/cli.ts invariant [--seeds a,b,c] # no-cheating serializer check
  *    tsx src/cli.ts llm-game [--model X|mock] [--rules official|digest]
- *                   [--profile neutral|expert] [--reasoning brief|extended|scot|none] [--seed N] ...
+ *                   [--profile neutral|expert] [--reasoning brief|extended|scot|none]
+ *                   [--context conversational|stateless] [--history full|lean]
+ *                   [--compact-threshold N] [--compact-keep N] [--seed N] ...
  *    tsx src/cli.ts fetch-rules              # snapshot NSG learn-to-play guides
  *    tsx src/cli.ts audit [--file <game.json>] # conservation audit (default: golden fixtures)
+ *    tsx src/cli.ts format --file <game.json>  # markdown game narratives (.report.md + .full.md)
  *
  *  Game records are written to harness/out/ as JSON; batch also writes a
  *  summary. Exit code is non-zero on any failed acceptance condition.
@@ -21,6 +24,7 @@ import { golden } from "./golden.js";
 import { runLLMGame } from "./llmgame.js";
 import { fetchRules } from "./rules.js";
 import { auditGolden, auditFile, reportAudit } from "./audit.js";
+import { writeFormatted } from "./format.js";
 import { normalizeLog, firstDivergence } from "./log.js";
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
@@ -138,6 +142,11 @@ if (command === "run-game") {
     reasoningArg === "extended" ? "extended" as const :
     reasoningArg === "scot" ? "scot" as const :
     reasoningArg === "none" ? "none" as const : "brief" as const;
+  const contextMode =
+    arg("context", "conversational") === "stateless"
+      ? "stateless" as const
+      : "conversational" as const;
+  const historyVariant = arg("history", "full") === "lean" ? "lean" as const : "full" as const;
   const record = await runLLMGame({
     repoRoot,
     seed,
@@ -147,32 +156,55 @@ if (command === "run-game") {
     rulesSource,
     profile: arg("profile", "neutral"),
     reasoningStyle,
+    contextMode,
+    historyVariant,
+    // Per-model knob: ~70-80% of the model's context window (default is
+    // tuned for 200K-window models like haiku; see PROMPTING.md).
+    compactionThreshold: parseInt(arg("compact-threshold", "150000"), 10),
+    compactionKeepTurns: parseInt(arg("compact-keep", "20"), 10),
     outDir,
   });
   console.log(summarize(record));
   console.log(
     `model=${record.model} rules=${record.rulesSource} profile=${record.promptProfile}/` +
-    `${record.reasoningStyle} llmDecisions=${record.llmDecisions} ` +
+    `${record.reasoningStyle} context=${record.contextMode}` +
+    (record.historyVariant ? `/${record.historyVariant}` : "") +
+    ` llmDecisions=${record.llmDecisions} ` +
     `rulesDecisions=${record.rulesDecisions} retries=${record.retriesTotal} ` +
     `fallbacks=${record.fallbacks} invalidRecords=${record.invalidRecords}`
   );
   console.log(
     `tokens in=${record.usage.tokensIn} out=${record.usage.tokensOut} ` +
-    `cacheRead=${record.usage.cacheRead} cacheWrite=${record.usage.cacheWrite}`
+    `cacheRead=${record.usage.cacheRead} cacheWrite=${record.usage.cacheWrite} ` +
+    `compactions=${record.compactions} transcriptMax=${record.transcriptTokensMax}`
   );
   console.log(`decision log: ${record.decisionLogPath}`);
   if (model === "mock") {
     // CI acceptance: the mock injects one transient and one persistent
-    // malformed response — both paths must have been exercised.
+    // malformed response — both retry and fallback paths must have been
+    // exercised — and (conversational default) the synthetic mock usage
+    // must have driven at least one compaction, keylessly.
     const ok =
       record.status === "completed" &&
       record.invalidRecords === 0 &&
       record.retriesTotal >= 1 &&
-      record.fallbacks >= 1;
+      record.fallbacks >= 1 &&
+      (record.contextMode !== "conversational" || record.compactions >= 1);
     console.log(ok ? "LLM-GAME (mock): PASS" : "LLM-GAME (mock): FAIL");
     process.exit(ok ? 0 : 1);
   }
   process.exit(record.status === "completed" && record.invalidRecords === 0 ? 0 : 1);
+} else if (command === "format") {
+  const file = arg("file", "");
+  if (!file) {
+    console.error("format requires --file <game.json>");
+    process.exit(2);
+  }
+  const jsonl = file.replace(/\.json$/, ".jsonl");
+  const { existsSync } = await import("node:fs");
+  const written = await writeFormatted(file, existsSync(jsonl) ? jsonl : null);
+  for (const w of written) console.log(w);
+  process.exit(0);
 } else if (command === "audit") {
   const file = arg("file", "");
   const results = file ? [await auditFile(repoRoot, file)] : await auditGolden(repoRoot);

@@ -157,11 +157,22 @@ FIRST, then the "option" index — your reasoning should produce the choice,
 not justify it afterwards.
 - option: the integer index of your choice`;
 
+/** Appended to the interface guide in conversational mode (D01): honest
+ *  mechanics disclosure only — how the model's memory works, no advice on
+ *  what to do with it. */
+export const CONVERSATIONAL_NOTE = `
+This is a continuous conversation: your previous decisions and reasoning
+remain in your context as the game proceeds. If the transcript nears the
+context limit, you will be asked to write a summary for your future self,
+and play continues from that summary plus your most recent exchanges
+verbatim.`;
+
 export function buildSystemPrompt(
   runnerReference: string,
   corpReference: string,
   rulesText: string = RULES_DIGEST,
-  profile: PromptProfile = { ...PROFILES["neutral"]!, reasoningStyle: "brief" }
+  profile: PromptProfile = { ...PROFILES["neutral"]!, reasoningStyle: "brief" },
+  contextMode: "conversational" | "stateless" = "conversational"
 ): string {
   // The digest's "Strategic basics" section is harness-authored advice;
   // strip it under hint-free profiles. Official rules text keeps its own
@@ -175,7 +186,7 @@ export function buildSystemPrompt(
     "",
     rules,
     "",
-    INTERFACE_GUIDE,
+    INTERFACE_GUIDE + (contextMode === "conversational" ? CONVERSATIONAL_NOTE : ""),
     REASONING_DIRECTIVES[profile.reasoningStyle],
     "",
     "# Card reference (open decklists)",
@@ -201,15 +212,19 @@ export interface PageDecisionRequest {
   reproductionCode: string | null;
 }
 
-export function buildDecisionMessage(request: PageDecisionRequest): string {
+function decisionHeader(request: PageDecisionRequest): string {
   const turn = request.turn
     ? `${request.turn.side} turn ${request.turn.number}`
     : "setup";
   const phase = request.phase
     ? `${request.phase.identifier} (${request.phase.title})`
     : "unknown phase";
+  return `Decision #${request.seq} — ${turn}, phase ${phase}, type ${request.decisionType}.`;
+}
+
+export function buildDecisionMessage(request: PageDecisionRequest): string {
   return [
-    `Decision #${request.seq} — ${turn}, phase ${phase}, type ${request.decisionType}.`,
+    decisionHeader(request),
     "",
     "GAME STATE (your view):",
     JSON.stringify(request.state),
@@ -219,4 +234,31 @@ export function buildDecisionMessage(request: PageDecisionRequest): string {
     "",
     `Choose one option index (0-${request.options.length - 1}) via the choose_option tool.`,
   ].join("\n");
+}
+
+/** History-variant B (D01 "lean"): what a PAST decision's user turn keeps
+ *  in the transcript — header + options, no state, no log tail. The
+ *  decision as SENT always carries the fresh state (buildDecisionMessage);
+ *  under lean, only this reduced form persists, so past board positions
+ *  live in the model's own words. */
+export function buildLeanDecisionMessage(request: PageDecisionRequest): string {
+  return [
+    decisionHeader(request),
+    "",
+    "LEGAL OPTIONS:",
+    ...request.options.map((o, i) => `${i}: ${JSON.stringify(o)}`),
+  ].join("\n");
+}
+
+/** Compaction trigger (D01): the harness supplies the trigger and the empty
+ *  page; every remembered word is the model's own. */
+export function buildCompactionNotice(keepTurns: number): string {
+  return (
+    "The transcript is approaching the context limit and will be " +
+    "compacted. Write a summary of the game so far for your future self — " +
+    "whatever you will want to remember to keep playing well. After " +
+    "compaction, your context will be: the system prompt, this summary, " +
+    `and your last ${keepTurns} decision exchanges verbatim. Reply with ` +
+    "the summary text only."
+  );
 }

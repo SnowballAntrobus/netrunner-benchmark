@@ -5,6 +5,11 @@ Every LLM game writes `out/<game_id>.jsonl` — one JSON record per decision,
 artifact: win rates come from the game record, but everything about *how*
 a model played comes from here.
 
+Since D01, the stream carries two record types, distinguished by
+`record_type`: `"decision"` (the overwhelming majority; absent in game-1
+records, which predate the field) and `"compaction"` (conversational mode
+only — see below).
+
 ## The two decision layers
 
 The engine asks players two kinds of questions, and they arrive as chains:
@@ -54,10 +59,40 @@ chance to react, and "n" declining it.
   "model": "claude-...",
   "tokens_in": 2900, "tokens_out": 85, "cache_read": 11200,
   "latency_ms": 1840,
-  "reproduction_code": "..."       // executable engine state string —
+  "reproduction_code": "...",      // executable engine state string —
                                    //   paste into the debug console (or the
                                    //   future `inspect` command) to rebuild
                                    //   this exact position
+  "transcript_tokens": 41200,      // D01: observed request size (system +
+                                   //   conversation + decision) for this
+                                   //   call. null on corp records and in
+                                   //   --context stateless
+  "compaction_id": 0               // D01: compaction epoch (0 = before the
+                                   //   first compaction). null if stateless
+}
+```
+
+## Compaction records (D01, conversational mode)
+
+When the transcript nears the threshold, the model writes a summary for
+its future self and the conversation restarts as [its summary] + the last
+K exchanges verbatim. Each such event is a first-class record in the same
+stream:
+
+```jsonc
+{
+  "record_type": "compaction",
+  "compaction_id": 1,              // 1-based epoch this event STARTED
+  "seq_before": 428,               // decision whose arrival triggered it
+  "log_index": 293,                // same anchoring as decisions
+  "transcript_tokens_before": 150505,
+  "dropped_turns": 209,            // exchanges now living ONLY in the summary
+  "kept_turns": 20,
+  "summary": "...",                // the model's own words — its entire
+                                   //   memory of the dropped past. When a
+                                   //   later confabulation needs tracing,
+                                   //   start here.
+  "model": "...", "tokens_in": ..., "tokens_out": ..., "latency_ms": ...
 }
 ```
 
@@ -85,7 +120,19 @@ to the LLM. Do not paste corp records into a live LLM's context mid-game.
 - **The mock's records look odd on purpose.** `reasoning: "mock: seeded
   random legal choice"`, plus one injected bad-index record (retries: 1)
   and one persistent-garbage record (fallback: true) — those exist to
-  prove the retry/fallback machinery; they are not model behavior.
+  prove the retry/fallback machinery; they are not model behavior. Mock
+  token counts are synthetic (~chars/4) so compaction exercises keylessly.
+- **Game-1 records are schema-degraded — root-caused and fixed.** The
+  engine's utility.js replaces the global `JSON.stringify` with a
+  log-readability version that collapses any object bearing a `.title` to
+  its title string (and null → `"null"`). Game-1 states/options passed
+  through it: grip entries and identities became bare title strings, phase
+  objects became titles, and ALL cardEntry detail (counters, strength,
+  rezzed, subroutines, hosted) was silently dropped from records and
+  prompts alike. harness.html now captures the pristine `JSON.stringify`
+  before the engine loads and the page bridge uses that, so records from
+  game 2 onward carry the full documented schema. Analysis code stays
+  tolerant of both shapes.
 - **`state` is the ground truth for "what did it know?"** Any claim like
   "the model ran into a known Urtica" is checkable: the state in that very
   record either shows the information or shows `{"hidden":true}`.

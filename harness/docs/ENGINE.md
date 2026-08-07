@@ -29,6 +29,19 @@ JSON (`{identity, cards[], name}`) in the `r`/`c` URL params, built from
 `precons/*.js` by `harness/src/precons.ts`. `faceoff=1` puts the rules AI in
 both seats.
 
+**Global JSON.stringify override (engine quirk).** utility.js replaces the
+page-global `JSON.stringify` with a log-readability wrapper whose replacer
+collapses any object bearing a `.title` to its title string, maps
+`null` → `"null"` and `undefined` → `"undefined"`, and repurposes the
+second argument as a `setNumbers` boolean. Fine for the engine's own log
+lines; catastrophic for harness serialization — this silently flattened
+every game-1 state and option (cardEntry objects → bare titles, counters/
+strength/subroutines dropped, phase objects → title strings). harness.html
+therefore captures `window.__pristineJSON = {stringify, parse}` BEFORE any
+engine script loads, and llmplayer.js + the invariant checker serialize
+through the pristine copy. The global override itself is untouched
+(quarantine policy — engine log lines still depend on it).
+
 ## Determinism ledger
 
 Everything found (via the `&rngtrace=1&rngstack=N-M` debug params in
@@ -145,6 +158,12 @@ logged into the same JSONL stream (options described from ITS view — the
 stream is host-side analysis data, never shown to the LLM). Both
 decklists are granted to the LLM in the system prompt (open decklists) —
 a deliberate prompt-layer grant, distinct from serializer honesty.
+
+Host-side (D01), the default is one running conversation per game with
+model-authored compaction — `Transcript` in `src/llm.ts`, threaded through
+`src/llmgame.ts`; `--context stateless` restores the game-1
+fresh-context-per-decision mode as the ablation arm. See PROMPTING.md and
+`docs/design/D01-conversation-context.md`.
 
 ## Conservation auditor (M4.5 — judge tier one)
 

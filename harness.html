@@ -10,6 +10,15 @@
 		<meta name="robots" content="noindex">
 		<title>Chiriboga Harness</title>
 		<link rel="stylesheet" type="text/css" href="style.css">
+		<!-- Pristine JSON capture (D02): utility.js replaces the global
+		     JSON.stringify with a log-readability version whose replacer
+		     collapses any object bearing a .title to its title string (and
+		     null -> "null", undefined -> "undefined"). Harness serialization
+		     must NOT inherit that collapse — cardEntry objects (counters,
+		     strength, rezzed, subroutines, hosted) would flatten to bare
+		     titles, which is exactly what degraded every game-1 record.
+		     Captured here, before any engine script loads. -->
+		<script>window.__pristineJSON = { stringify: JSON.stringify, parse: JSON.parse };</script>
 		<script src="jquery/jquery-3.2.1.min.js"></script>
 		<script src="cardrenderer/pixi.min.js"></script>
 		<script src="cardrenderer/pixi-particles.min.js"></script>

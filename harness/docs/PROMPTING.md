@@ -31,6 +31,84 @@ Notes:
   official-text neutrality choice and is NOT stripped by `neutral` (the
   profile governs harness-authored words only).
 
+## Conversational context (`--context`, `--history`) — D01
+
+The default is one running conversation per game: every decision message
+and every accepted response stays in the model's context, and the model
+compacts its own history. `--context stateless` (game 1's mode: fresh
+context per decision) is retained as the ablation arm. The literature
+basis, failure modes, and the variant analysis live in
+`docs/design/D01-conversation-context.md`.
+
+| knob | values | default | meaning |
+|---|---|---|---|
+| `--context` | conversational / stateless | conversational | one running conversation vs fresh context per decision |
+| `--history` | full / lean | full | what a PAST decision's user turn keeps: the complete message (variant A) or header+options only (variant B — past board positions then live only in the model's own words) |
+| `--compact-threshold` | tokens | 150000 | compact when the observed request size crosses this — a PER-MODEL knob (see "Choosing the threshold" below) |
+| `--compact-keep` | exchanges | 20 | exchanges kept verbatim through a compaction reset |
+
+### Choosing the threshold (per-model knob)
+
+The threshold must be tuned to the context window of the model under
+test; 150K is the default for 200K-window models (haiku included). The
+literature triangulates it from three directions:
+
+- **Platform defaults for the identical mechanism.** Anthropic's API
+  compaction feature (model-written summary, conversation continues from
+  it) triggers at 150K input tokens by default, minimum 50K, with no
+  model-specific differentiation across Opus/Sonnet/Haiku — our default
+  IS the platform default. Claude Code auto-compacts at ~83% of the
+  window (~166K on 200K), and its practitioner guidance favors compacting
+  earlier (60–80%) because smaller, more frequent summaries preserve more
+  detail than one giant one. MemGPT's queue manager signals "memory
+  pressure" at 70% of the window. The quality band is therefore roughly
+  70–83% of the window; 150K/200K = 75% sits in the middle of it.
+- **Long-context degradation says don't go higher.** RULER
+  (arXiv:2404.06654): only about half of tested models keep satisfactory
+  performance even at 32K — effective context < claimed context is the
+  norm. NoLiMa (arXiv:2502.05167): under retrieval WITHOUT literal
+  matching, 11/13 models halve their short-context performance by 32K
+  (Claude 3.5 Sonnet's 85%-retention effective length: 4K). Those probes
+  are worst-case-adversarial for buried facts, which is why the harness
+  re-sends the FRESH state every decision — board facts never rely on
+  deep-context retrieval — but they firmly argue against pushing the
+  threshold toward the window limit.
+- **A floor from our own message sizes.** Post-compaction baseline under
+  `--history full` ≈ system (~33K) + summary + 20 full exchanges
+  (~60–80K) ≈ 100–115K, so thresholds below ~130K would thrash
+  (compaction every few decisions). Under `--history lean` the baseline
+  collapses and much lower thresholds become experimentally available.
+- **Caution on what compaction can fix.** Vending-Bench
+  (arXiv:2502.15840) found long-horizon agent breakdowns do NOT correlate
+  with context-window fill — coherence failures are behavioral, not
+  purely memory-limit. Threshold tuning shapes cost and memory quality;
+  it should not be expected to remove long-horizon degradation, which is
+  part of what this benchmark measures.
+
+Rule of thumb for a new model: start at ~75% of its context window,
+verify the post-compaction baseline leaves a sane epoch length, and log
+everything — the threshold is itself an experimental variable.
+
+Mechanics worth knowing when reading results:
+
+- The transcript is append-only and immutable (prompt caching requires
+  prefix immutability); a moving cache breakpoint sits on the last
+  history turn, so each call re-reads the prior conversation at cache
+  price. Assistant turns store the raw JSON of the accepted tool call as
+  plain text; retries never enter the transcript.
+- At compaction the model writes a summary FOR ITS FUTURE SELF (the
+  harness supplies only the trigger and the empty page — see
+  `buildCompactionNotice`); the conversation restarts as [notice] + [its
+  summary] + [last K exchanges verbatim]. Every compaction is a
+  first-class JSONL record carrying the full summary text
+  (DECISION_LOG.md) and is rendered in both formatter views.
+- In conversational mode the system prompt carries one added
+  interface-guide paragraph (`CONVERSATIONAL_NOTE`) disclosing these
+  mechanics — memory disclosure, not strategy advice; it is part of the
+  saved system prompt like every other authored word.
+- Per-decision `transcript_tokens` and `compaction_id` in the records
+  make context size a first-class analysis variable.
+
 ## Reasoning elicitation (`--reasoning`)
 
 The `choose_option` tool schema lists `reasoning` BEFORE `option`, and the

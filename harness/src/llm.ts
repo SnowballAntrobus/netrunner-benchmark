@@ -1,13 +1,26 @@
-/** LLM clients + retry bridge (PHASE1 M4).
+/** LLM clients + transcript + retry bridge (PHASE1 M4; D01 conversational).
  *
  *  AnthropicClient: forced tool call ("choose_option") so the response is
  *  schema-validated JSON at the API layer; system prompt carries a
- *  prompt-cache breakpoint (static per game, reused across ~300+ decisions).
+ *  prompt-cache breakpoint (static per game); in conversational mode a
+ *  second, moving breakpoint sits on the last transcript turn so the whole
+ *  immutable history prefix is a cache hit.
+ *
+ *  Transcript (D01): the append-only conversation history. The Messages API
+ *  is stateless — the "conversation" exists only because we re-send it.
+ *  Assistant turns store the raw JSON of the model's accepted tool call as
+ *  plain text (the same convention the retry loop has always used), which
+ *  sidesteps tool_use/tool_result echo requirements while preserving every
+ *  word of the model's reasoning verbatim. Compaction: when the observed
+ *  request size crosses the threshold, the model writes a summary FOR ITS
+ *  FUTURE SELF and the transcript restarts as [notice] + [its summary] +
+ *  [last K exchanges verbatim] — the Claude-Plays-Pokémon reset shape.
  *
  *  MockClient: deterministic, keyless — CI's end-to-end path. Injects one
  *  transient malformed response (exercises retry) and one persistently
  *  malformed decision (exercises fallback), then picks seeded-random legal
- *  options.
+ *  options. Reports SYNTHETIC usage (≈ chars/4) so the compaction path is
+ *  exercised keylessly with the production threshold.
  */
 import Anthropic from "@anthropic-ai/sdk";
 
@@ -16,6 +29,14 @@ export interface Usage {
   tokensOut: number;
   cacheRead: number;
   cacheWrite: number;
+}
+
+/** One conversation message. `cache: true` marks a prompt-cache breakpoint
+ *  (rendered as a content-block cache_control by AnthropicClient). */
+export interface ChatMessage {
+  role: "user" | "assistant";
+  content: string;
+  cache?: boolean;
 }
 
 export interface ChoiceAttempt {
@@ -30,16 +51,48 @@ export interface ChoiceContext {
   optionCount: number;
 }
 
+export interface SummaryResult {
+  text: string;
+  usage: Usage;
+  latencyMs: number;
+}
+
 export interface ChoiceClient {
   readonly model: string;
   chooseOption(
     system: string,
-    messages: { role: "user" | "assistant"; content: string }[],
+    messages: ChatMessage[],
     context: ChoiceContext
   ): Promise<ChoiceAttempt>;
+  /** Free-text call (no forced tool) — used for compaction summaries. */
+  summarize(system: string, messages: ChatMessage[]): Promise<SummaryResult>;
 }
 
 const ZERO_USAGE: Usage = { tokensIn: 0, tokensOut: 0, cacheRead: 0, cacheWrite: 0 };
+
+function renderMessages(
+  messages: ChatMessage[]
+): { role: "user" | "assistant"; content: string | { type: "text"; text: string; cache_control: { type: "ephemeral" } }[] }[] {
+  return messages.map((m) =>
+    m.cache
+      ? {
+          role: m.role,
+          content: [
+            { type: "text" as const, text: m.content, cache_control: { type: "ephemeral" as const } },
+          ],
+        }
+      : { role: m.role, content: m.content }
+  );
+}
+
+function usageOf(response: { usage: Anthropic.Usage }): Usage {
+  return {
+    tokensIn: response.usage.input_tokens,
+    tokensOut: response.usage.output_tokens,
+    cacheRead: response.usage.cache_read_input_tokens ?? 0,
+    cacheWrite: response.usage.cache_creation_input_tokens ?? 0,
+  };
+}
 
 export class AnthropicClient implements ChoiceClient {
   readonly model: string;
@@ -54,7 +107,7 @@ export class AnthropicClient implements ChoiceClient {
 
   async chooseOption(
     system: string,
-    messages: { role: "user" | "assistant"; content: string }[],
+    messages: ChatMessage[],
     _context: ChoiceContext
   ): Promise<ChoiceAttempt> {
     const response = await this.client.messages.create({
@@ -87,21 +140,26 @@ export class AnthropicClient implements ChoiceClient {
         },
       ],
       tool_choice: { type: "tool", name: "choose_option" },
-      messages,
+      messages: renderMessages(messages),
     });
-    const usage: Usage = {
-      tokensIn: response.usage.input_tokens,
-      tokensOut: response.usage.output_tokens,
-      cacheRead: response.usage.cache_read_input_tokens ?? 0,
-      cacheWrite: response.usage.cache_creation_input_tokens ?? 0,
-    };
+    const usage = usageOf(response);
     const block = response.content.find((b) => b.type === "tool_use");
     if (block && block.type === "tool_use") {
       const input = block.input as { option?: unknown; reasoning?: unknown };
-      if (typeof input.option === "number") {
+      // Type-level coercion ONLY: models sometimes emit the index as a
+      // numeric string ("2"); that is the same choice in the wrong type,
+      // so accept it. Out-of-range or non-numeric values still go through
+      // the corrective retry loop — never guess a different choice.
+      const option =
+        typeof input.option === "number"
+          ? Math.trunc(input.option)
+          : typeof input.option === "string" && /^\s*\d+\s*$/.test(input.option)
+            ? parseInt(input.option, 10)
+            : null;
+      if (option !== null) {
         return {
           parsed: {
-            option: Math.trunc(input.option),
+            option,
             reasoning: String(input.reasoning ?? ""),
           },
           raw: JSON.stringify(block.input),
@@ -111,6 +169,24 @@ export class AnthropicClient implements ChoiceClient {
       return { parsed: null, raw: JSON.stringify(block.input), usage };
     }
     return { parsed: null, raw: JSON.stringify(response.content), usage };
+  }
+
+  async summarize(system: string, messages: ChatMessage[]): Promise<SummaryResult> {
+    const startedAt = Date.now();
+    const response = await this.client.messages.create({
+      model: this.model,
+      max_tokens: 2048,
+      system: [
+        { type: "text", text: system, cache_control: { type: "ephemeral" } },
+      ],
+      messages: renderMessages(messages),
+    });
+    const text = response.content
+      .filter((b): b is Anthropic.TextBlock => b.type === "text")
+      .map((b) => b.text)
+      .join("\n")
+      .trim();
+    return { text, usage: usageOf(response), latencyMs: Date.now() - startedAt };
   }
 }
 
@@ -135,26 +211,44 @@ export class MockClient implements ChoiceClient {
     this.rng = lcg(seed + 7919);
   }
 
+  /** Synthetic request size (≈ chars/4) so conversational-mode compaction
+   *  triggers keylessly at the production threshold. Decisions themselves
+   *  never depend on messages — choices stay LCG-deterministic. */
+  private estimateUsage(system: string, messages: ChatMessage[]): Usage {
+    let chars = system.length;
+    for (const m of messages) chars += m.content.length;
+    return { tokensIn: Math.ceil(chars / 4), tokensOut: 32, cacheRead: 0, cacheWrite: 0 };
+  }
+
   async chooseOption(
-    _system: string,
-    _messages: { role: "user" | "assistant"; content: string }[],
+    system: string,
+    messages: ChatMessage[],
     context: ChoiceContext
   ): Promise<ChoiceAttempt> {
+    const usage = this.estimateUsage(system, messages);
     if (context.callIndex === this.persistentBadAt) {
-      return { parsed: null, raw: "\"I choose to run HQ!\" (mock: persistent-garbage)", usage: ZERO_USAGE };
+      return { parsed: null, raw: "\"I choose to run HQ!\" (mock: persistent-garbage)", usage };
     }
     if (context.callIndex === this.transientBadAt && context.attempt === 1) {
       return {
         parsed: { option: 9999, reasoning: "mock: transient bad index" },
         raw: "{\"option\":9999}",
-        usage: ZERO_USAGE,
+        usage,
       };
     }
     const option = Math.floor(this.rng() * context.optionCount);
     return {
       parsed: { option, reasoning: "mock: seeded random legal choice" },
-      raw: JSON.stringify({ option }),
-      usage: ZERO_USAGE,
+      raw: JSON.stringify({ option, reasoning: "mock: seeded random legal choice" }),
+      usage,
+    };
+  }
+
+  async summarize(system: string, messages: ChatMessage[]): Promise<SummaryResult> {
+    return {
+      text: "mock: summary for my future self (compaction exercised keylessly).",
+      usage: this.estimateUsage(system, messages),
+      latencyMs: 0,
     };
   }
 }
@@ -164,6 +258,76 @@ export function makeClient(model: string, seed: number, maxTokens = 1024): Choic
   return new AnthropicClient(model, maxTokens);
 }
 
+// ---- transcript (D01) ------------------------------------------------------
+
+export class Transcript {
+  /** Append-only user/assistant exchange pairs (post-compaction: notice +
+   *  summary + kept pairs). Content is immutable once appended — the
+   *  prompt-cache prefix depends on it. */
+  private turns: ChatMessage[] = [];
+  /** Last observed request size (system + history + decision message),
+   *  from API usage data; null until the first decision (and reset by
+   *  compaction, whose reshuffle invalidates the estimate). */
+  promptTokens: number | null = null;
+  compactions = 0;
+
+  constructor(
+    readonly threshold: number,
+    readonly keepPairs: number
+  ) {}
+
+  /** History to send: cache breakpoint on the final (most recent) turn so
+   *  the whole immutable prefix is one cache hit. */
+  messages(): ChatMessage[] {
+    return this.turns.map((t, i) =>
+      i === this.turns.length - 1 ? { ...t, cache: true } : t
+    );
+  }
+
+  append(userContent: string, assistantContent: string): void {
+    this.turns.push(
+      { role: "user", content: userContent },
+      { role: "assistant", content: assistantContent }
+    );
+  }
+
+  notePromptTokens(n: number): void {
+    this.promptTokens = n;
+  }
+
+  shouldCompact(): boolean {
+    return (
+      this.promptTokens !== null &&
+      this.promptTokens > this.threshold &&
+      this.turns.length > this.keepPairs * 2
+    );
+  }
+
+  /** Replace the transcript with [notice] + [model's own summary] + the
+   *  last keepPairs exchanges verbatim. Returns how many exchanges were
+   *  dropped (compacted into the summary). */
+  compact(summary: string): { droppedPairs: number; keptPairs: number } {
+    const kept = this.turns.slice(-this.keepPairs * 2);
+    const droppedPairs = Math.floor((this.turns.length - kept.length) / 2);
+    this.turns = [
+      {
+        role: "user",
+        content:
+          "[Transcript compacted to fit the context window. The summary you " +
+          "wrote for your future self follows; after it, your most recent " +
+          "exchanges continue verbatim.]",
+      },
+      { role: "assistant", content: summary },
+      ...kept,
+    ];
+    this.promptTokens = null;
+    this.compactions++;
+    return { droppedPairs, keptPairs: Math.floor(kept.length / 2) };
+  }
+}
+
+// ---- retry bridge ----------------------------------------------------------
+
 export interface BridgeResult {
   option: number;
   reasoning: string;
@@ -172,26 +336,34 @@ export interface BridgeResult {
   fallback: boolean;
   usage: Usage;
   latencyMs: number;
+  /** Request size (input + cache read + cache write) of the LAST attempt —
+   *  the observed transcript-plus-decision footprint driving compaction. */
+  promptTokens: number;
 }
 
 const MAX_ATTEMPTS = 3;
 
 /** Retry loop: malformed or out-of-range responses get one corrective
  *  follow-up message per retry; after MAX_ATTEMPTS, fall back to option 0
- *  with the incident flagged. */
+ *  with the incident flagged. Retries stay INSIDE the decision — the
+ *  corrective exchanges never enter the transcript (history is passed in,
+ *  never mutated here). */
 export async function decideWithRetries(
   client: ChoiceClient,
   system: string,
+  history: ChatMessage[],
   decisionMessage: string,
   callIndex: number,
   optionCount: number
 ): Promise<BridgeResult> {
   const startedAt = Date.now();
   const usage: Usage = { ...ZERO_USAGE };
-  const messages: { role: "user" | "assistant"; content: string }[] = [
+  const messages: ChatMessage[] = [
+    ...history,
     { role: "user", content: decisionMessage },
   ];
   let lastRaw = "";
+  let promptTokens = 0;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const result = await client.chooseOption(system, messages, {
       callIndex,
@@ -202,6 +374,8 @@ export async function decideWithRetries(
     usage.tokensOut += result.usage.tokensOut;
     usage.cacheRead += result.usage.cacheRead;
     usage.cacheWrite += result.usage.cacheWrite;
+    promptTokens =
+      result.usage.tokensIn + result.usage.cacheRead + result.usage.cacheWrite;
     lastRaw = result.raw;
     if (
       result.parsed !== null &&
@@ -216,6 +390,7 @@ export async function decideWithRetries(
         fallback: false,
         usage,
         latencyMs: Date.now() - startedAt,
+        promptTokens,
       };
     }
     messages.push(
@@ -237,5 +412,6 @@ export async function decideWithRetries(
     fallback: true,
     usage,
     latencyMs: Date.now() - startedAt,
+    promptTokens,
   };
 }

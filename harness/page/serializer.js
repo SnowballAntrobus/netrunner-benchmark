@@ -183,16 +183,38 @@
   function playerEntry(player, viewer) {
     var isRunner = player === runner;
     var entry = {
-      identity: player.identityCard
-        ? { id: player.identityCard.setNumber, title: player.identityCard.title }
-        : null,
+      // Full cardEntry (D02): identities can host counters and cards.
+      identity: player.identityCard ? cardEntry(player.identityCard, viewer) : null,
       credits: Credits(player),
       clicks: player.clickTracker,
       maxHandSize: MaxHandSize(player),
       agendaPoints: AgendaPoints(player),
       scored: pileEntries(player.scoreArea, viewer),
     };
+    // Events/operations mid-resolution (D02): Play() moves the card to
+    // resolvingCards, previously an unserialized zone — an active Overclock
+    // (with its hosted credits) was invisible. cardEntry → PlayerCanLook
+    // honesty applies as everywhere.
+    if (player.resolvingCards && player.resolvingCards.length) {
+      entry.resolving = pileEntries(player.resolvingCards, viewer);
+    }
+    // Set-aside cards live on the identity (e.g. Ayla). PlayerCanLook
+    // already knows this zone (owner may look).
+    if (
+      player.identityCard &&
+      player.identityCard.setAsideCards &&
+      player.identityCard.setAsideCards.length
+    ) {
+      entry.setAside = pileEntries(player.identityCard.setAsideCards, viewer);
+    }
     if (isRunner) {
+      // Run-scoped credits (D02): already INCLUDED in the credits total
+      // (Credits() adds them) but lost unspent at run end — surfaced so the
+      // ephemeral part of the total is visible. Name matches the engine's
+      // public log line ("... unspent temporary credits").
+      if (player.temporaryCredits > 0) {
+        entry.temporaryCredits = player.temporaryCredits;
+      }
       entry.tags = player.tags;
       entry.coreDamage = player.coreDamage;
       entry.grip = viewer === player
@@ -247,6 +269,20 @@
       if (typeof encounteredIce !== "undefined" && encounteredIce) {
         state.run.encounteredIce = cardEntry(encounteredIce, viewer);
       }
+      // The card being accessed (D02): the steal/trash/continue decision's
+      // options are bare {} — without this the accessed card appears
+      // nowhere in the request. PlayerCanLook grants visibility of the
+      // accessed card to any viewer (engine's own rule, utility.js) and we
+      // defer to the choke point as everywhere.
+      if (typeof accessingCard !== "undefined" && accessingCard) {
+        state.run.accessingCard = cardEntry(accessingCard, viewer);
+      }
+    }
+    // RFG zone (D02): live in the current pool — Spin Doctor removes
+    // itself from the game. One shared engine array; name matches the
+    // "removed from the game" log line.
+    if (typeof removedFromGame !== "undefined" && removedFromGame.length) {
+      state.removedFromGame = pileEntries(removedFromGame, viewer);
     }
     return state;
   }
@@ -268,6 +304,14 @@
     var all = AllCards(corp).concat(AllCards(runner));
     if (corp.identityCard) all.push(corp.identityCard);
     if (runner.identityCard) all.push(runner.identityCard);
+    // Zones the engine's AllCards omits but the serializer now emits (D02):
+    // keep the checker's census a superset of the serializer's reach.
+    if (typeof removedFromGame !== "undefined") all = all.concat(removedFromGame);
+    [corp, runner].forEach(function (p) {
+      if (p.identityCard && p.identityCard.setAsideCards) {
+        all = all.concat(p.identityCard.setAsideCards);
+      }
+    });
     return all;
   }
 
@@ -289,7 +333,12 @@
         activePlayer: state.phase.activePlayer,
       };
     }
-    var json = JSON.stringify(state);
+    // Pristine stringify (harness.html): the engine's global override
+    // collapses title-bearing objects — the structural scan must see the
+    // full serialized structure, exactly as the host receives it.
+    var stringifyFull =
+      (window.__pristineJSON && window.__pristineJSON.stringify) || JSON.stringify;
+    var json = stringifyFull(state);
 
     // Structural check: no title of a card the viewer cannot see — unless a
     // same-titled copy is legitimately visible somewhere.
@@ -303,7 +352,7 @@
     }
     for (var title in hiddenTitles) {
       if (visibleTitles[title]) continue;
-      if (json.indexOf(JSON.stringify(title).slice(1, -1)) !== -1) {
+      if (json.indexOf(stringifyFull(title).slice(1, -1)) !== -1) {
         window.__harness.invariantViolations.push({
           decision: decisionIndex,
           viewer: side,

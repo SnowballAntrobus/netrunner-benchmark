@@ -15,6 +15,7 @@
     "llm-game": "tsx src/cli.ts llm-game",
     "fetch-rules": "tsx src/cli.ts fetch-rules",
     "audit": "tsx src/cli.ts audit",
+    "format": "tsx src/cli.ts format",
     "test": "npm run typecheck && npm run determinism -- --seed 7"
   },
   "dependencies": {

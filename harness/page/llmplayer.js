@@ -27,6 +27,14 @@
   var llmSeat = params.get("llm"); // "runner" (only supported seat for now)
   if (llmSeat !== "runner") return;
 
+  // The engine's utility.js overrides the global JSON.stringify with a
+  // title-collapsing replacer (readable logs). Harness requests must keep
+  // full structure — use the pristine stringify captured by harness.html
+  // before the engine loaded. (Root cause of the game-1 "compact strings"
+  // schema drift.)
+  var stringify =
+    (window.__pristineJSON && window.__pristineJSON.stringify) || JSON.stringify;
+
   // ---- option serialization ----------------------------------------------
 
   // Fallback descriptions in official (NSG rulebook) terminology for engine
@@ -102,6 +110,7 @@
     var request = {
       seat: llmSeat,
       decisionType: decisionType,
+      logIndex: typeof capturedLog !== "undefined" ? capturedLog.length : null,
       seq: window.__harness.decisions,
       turn: window.__harness.turn,
       phase: currentPhase
@@ -112,7 +121,7 @@
       reproductionCode: safeReproductionCode(),
     };
     return window
-      .__harnessDecide(JSON.stringify(request))
+      .__harnessDecide(stringify(request))
       .then(function (responseJson) {
         var response = JSON.parse(responseJson);
         if (response.abort) {
@@ -160,9 +169,10 @@
         return Promise.resolve(result).then(function (idx) {
           try {
             window.__harnessLogDecision(
-              JSON.stringify({
+              stringify({
                 seat: seat,
                 decisionType: decisionType,
+                logIndex: typeof capturedLog !== "undefined" ? capturedLog.length : null,
                 seq: window.__harness.decisions,
                 turn: turn,
                 phase: phase,
