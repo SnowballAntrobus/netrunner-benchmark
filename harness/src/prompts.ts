@@ -224,6 +224,9 @@ export interface PageDecisionRequest {
     previewed_at_seq: number;
     preview: unknown[];
   };
+  /** D03: single-option decision auto-resolved at the page layer — the
+   *  host logs it (no API call, no transcript entry) and answers 0. */
+  forced?: boolean;
 }
 
 function decisionHeader(request: PageDecisionRequest): string {

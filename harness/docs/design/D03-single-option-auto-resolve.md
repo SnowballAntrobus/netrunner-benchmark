@@ -1,9 +1,10 @@
 # D03 — Auto-resolve single-option decisions
 
-**Status: awaiting review (rev 2 — updated for D05)** · Deferred from
-the game-1 batch at Dante's direction ("careful re single-option
-removal"); rev 2 incorporates the review discussion (the two kinds of
-forced decision) and the D05 sequencing that resolves open question 3.
+**Status: approved — IMPLEMENTED** (all three questions resolved in
+review; results at bottom). · Deferred from the game-1 batch at Dante's
+direction ("careful re single-option removal"); rev 2 incorporated the
+review discussion (the two kinds of forced decision) and the D05
+sequencing that resolved open question 3.
 
 ## Rev 2: what D05 changes
 
@@ -106,9 +107,30 @@ measure exactly this effect. Recommendation stands: on by default.
    above): with verb-level previews in place, the binary rule loses
    nothing; the flag space stays `--auto-resolve on|off`.
 
-## Acceptance (after approval)
+## Acceptance — results
 
-Mock game: forcedDecisions > 0, llmDecisions ≈ 170 (down from 570),
-retries/fallback paths still exercised, PASS. Typecheck + full suite
-green. A short real-game smoke is NOT required before game 2 — the path
-is engine-choice-identical by construction.
+- Implementation: the page sets `forced: true` on 1-option requests
+  (`&autoresolve=0` disables; `--auto-resolve on|off`, default on); the
+  host answers `{option: 0}` itself, writing a full decision record
+  (state, options, `preview_divergence`, `forced: true`, model fields
+  null) with no API call and no transcript entry. The page-side flow —
+  option description, divergence check, preview noting — is identical
+  for forced and real decisions.
+- Mock game (seed 7): 166 forced vs 49 API decisions (77% forced,
+  matching game 1's ratio); transcript peak fell from ~151K to ~75K
+  tokens; retry/fallback paths still exercised; zero invalid records;
+  double-run: full record sequence and logs byte-identical. Full suite
+  green.
+- NOTE for cross-run comparisons: the MOCK's game differs from the
+  pre-D03 mock game because the mock client's internal LCG advances once
+  per API call (fewer calls → different stream). The ENGINE's seeded
+  stream is untouched — auto-resolve is choice-identical by
+  construction; for a real model the game line is unchanged wherever the
+  model would have picked the only option.
+- CI: the keyless mock now exercises retry + fallback + forced +
+  compaction in one game; the workflow's mock step passes
+  `--compact-threshold 40000` because auto-resolve shrinks the
+  transcript so much that the production 150K is never crossed keylessly
+  (the shrinkage being the point).
+- Engine-choice-identity means no real-game smoke is required before
+  game 2.

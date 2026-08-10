@@ -47,6 +47,10 @@ export interface LLMGameOptions {
    *  200K-window models (haiku) — matches Anthropic's own API compaction
    *  trigger default and the practitioner quality band. */
   compactionThreshold?: number;
+  /** D03: auto-resolve single-option decisions at the page layer (logged
+   *  as forced, no API call, no transcript entry). Default true; false is
+   *  the game-1-interface comparison arm. */
+  autoResolve?: boolean;
   /** Exchanges kept verbatim through a compaction reset. */
   compactionKeepTurns?: number;
 }
@@ -87,6 +91,9 @@ export interface DecisionRecord {
     previewed_at_seq: number;
     preview: unknown[];
   } | null;
+  /** D03: true = single-option decision auto-resolved at the page layer
+   *  (no API call, no transcript entry; model fields null). */
+  forced: boolean;
 }
 
 /** D01: compaction events are first-class records in the same JSONL stream —
@@ -117,7 +124,9 @@ export interface LLMGameRecord extends GameRecord {
   reasoningStyle: string;
   contextMode: "conversational" | "stateless";
   historyVariant: "full" | "lean" | null; // null when stateless
-  llmDecisions: number;
+  autoResolve: boolean;
+  llmDecisions: number; // API-answered decisions
+  forcedDecisions: number; // D03 auto-resolved (no API call)
   rulesDecisions: number;
   retriesTotal: number;
   fallbacks: number;
@@ -143,7 +152,11 @@ export function validateDecisionRecord(r: DecisionRecord): string[] {
   if (!Number.isInteger(r.choice) || r.choice < 0 || r.choice >= r.options.length)
     problems.push(`choice ${r.choice} out of range`);
   if (r.seat === "runner" && r.state === null) problems.push("runner record missing state");
-  if (r.seat === "runner" && r.model === null) problems.push("runner record missing model");
+  // Forced records (D03) never touched the model — model fields are null.
+  if (r.seat === "runner" && r.model === null && !r.forced)
+    problems.push("runner record missing model");
+  if (r.forced && r.options.length !== 1)
+    problems.push("forced record with more than one option");
   return problems;
 }
 
@@ -155,6 +168,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
   const historyVariant = options.historyVariant ?? "full";
   const compactionThreshold = options.compactionThreshold ?? 150_000;
   const compactionKeepTurns = options.compactionKeepTurns ?? 20;
+  const autoResolve = options.autoResolve ?? true;
   const startedAt = Date.now();
   const gameId = `llm-${model.replace(/[^a-z0-9.-]/gi, "_")}-s${seed}-${startedAt}`;
 
@@ -207,7 +221,9 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
     reasoningStyle: options.reasoningStyle,
     contextMode,
     historyVariant: contextMode === "conversational" ? historyVariant : null,
+    autoResolve,
     llmDecisions: 0,
+    forcedDecisions: 0,
     rulesDecisions: 0,
     retriesTotal: 0,
     fallbacks: 0,
@@ -254,6 +270,42 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
     await page.exposeFunction("__harnessDecide", async (requestJson: string) => {
       const request = JSON.parse(requestJson) as PageDecisionRequest;
       if (apiAborted) return JSON.stringify({ option: 0, abort: true });
+
+      // D03 forced path: single-option decision auto-resolved — full
+      // record (state, options, divergence marker), no API call, no
+      // transcript entry. Index 0 is the only possible outcome.
+      if (request.forced) {
+        record.forcedDecisions++;
+        await writeDecision({
+          record_type: "decision",
+          game_id: gameId,
+          seq: request.seq,
+          log_index: (request as { logIndex?: number | null }).logIndex ?? null,
+          turn: request.turn,
+          phase: request.phase,
+          seat: "runner",
+          decision_type: request.decisionType,
+          state: request.state,
+          options: request.options,
+          choice: 0,
+          reasoning: null,
+          raw_response: null,
+          retries: null,
+          fallback: null,
+          model: null,
+          tokens_in: null,
+          tokens_out: null,
+          cache_read: null,
+          latency_ms: null,
+          reproduction_code: request.reproductionCode,
+          transcript_tokens: null,
+          compaction_id: transcript ? transcript.compactions : null,
+          preview_divergence: request.previewDivergence ?? null,
+          forced: true,
+        });
+        return JSON.stringify({ option: 0 });
+      }
+
       record.llmDecisions++;
 
       // D01 compaction: checked BEFORE the decision, on the request size
@@ -358,6 +410,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
         transcript_tokens: transcript ? result.promptTokens : null,
         compaction_id: transcript ? transcript.compactions : null,
         preview_divergence: request.previewDivergence ?? null,
+        forced: false,
       });
       return JSON.stringify({ option: result.option });
     });
@@ -391,12 +444,14 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
         transcript_tokens: null,
         compaction_id: null,
         preview_divergence: r.previewDivergence ?? null,
+        forced: false,
       });
     });
 
     const url =
       `http://127.0.0.1:${staticServer.port}/harness.html` +
       `?faceoff=1&p=r&llm=runner&seed=${seed}` +
+      `&autoresolve=${autoResolve ? 1 : 0}` +
       `&c=${encodeDeckParam(corpDeck)}&r=${encodeDeckParam(runnerDeck)}`;
     await page.goto(url, { waitUntil: "load" });
 

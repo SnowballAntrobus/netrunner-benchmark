@@ -77,6 +77,13 @@ chance to react, and "n" declining it.
                                    //   --context stateless
   "compaction_id": 0,              // D01: compaction epoch (0 = before the
                                    //   first compaction). null if stateless
+  "forced": false,                 // D03: true = single-option decision
+                                   //   auto-resolved at the page layer —
+                                   //   full record, but NO API call, NO
+                                   //   transcript entry, model fields
+                                   //   null. ~78% of decisions. The game
+                                   //   record splits llmDecisions (API)
+                                   //   from forcedDecisions.
   "preview_divergence": null       // D05: on a SELECT decision, set to
                                    //   {command, previewed_at_seq, preview}
                                    //   when this menu differs from the

@@ -8,7 +8,8 @@
  *    tsx src/cli.ts llm-game [--model X|mock] [--rules official|digest]
  *                   [--profile neutral|expert] [--reasoning brief|extended|scot|none]
  *                   [--context conversational|stateless] [--history full|lean]
- *                   [--compact-threshold N] [--compact-keep N] [--seed N] ...
+ *                   [--compact-threshold N] [--compact-keep N]
+ *                   [--auto-resolve on|off] [--seed N] ...
  *    tsx src/cli.ts fetch-rules              # snapshot NSG learn-to-play guides
  *    tsx src/cli.ts audit [--file <game.json>] # conservation audit (default: golden fixtures)
  *    tsx src/cli.ts format --file <game.json>  # markdown game narratives (.report.md + .full.md)
@@ -162,6 +163,7 @@ if (command === "run-game") {
     // tuned for 200K-window models like haiku; see PROMPTING.md).
     compactionThreshold: parseInt(arg("compact-threshold", "150000"), 10),
     compactionKeepTurns: parseInt(arg("compact-keep", "20"), 10),
+    autoResolve: arg("auto-resolve", "on") !== "off",
     outDir,
   });
   console.log(summarize(record));
@@ -169,7 +171,8 @@ if (command === "run-game") {
     `model=${record.model} rules=${record.rulesSource} profile=${record.promptProfile}/` +
     `${record.reasoningStyle} context=${record.contextMode}` +
     (record.historyVariant ? `/${record.historyVariant}` : "") +
-    ` llmDecisions=${record.llmDecisions} ` +
+    ` autoResolve=${record.autoResolve ? "on" : "off"}` +
+    ` llmDecisions=${record.llmDecisions} forced=${record.forcedDecisions} ` +
     `rulesDecisions=${record.rulesDecisions} retries=${record.retriesTotal} ` +
     `fallbacks=${record.fallbacks} invalidRecords=${record.invalidRecords}`
   );
@@ -186,14 +189,16 @@ if (command === "run-game") {
   if (model === "mock") {
     // CI acceptance: the mock injects one transient and one persistent
     // malformed response — both retry and fallback paths must have been
-    // exercised — (conversational default) the synthetic mock usage
-    // must have driven at least one compaction, keylessly.
+    // exercised — (conversational default) the synthetic mock usage must
+    // have driven at least one compaction, and (auto-resolve default) at
+    // least one forced record must exist, all keylessly.
     const ok =
       record.status === "completed" &&
       record.invalidRecords === 0 &&
       record.retriesTotal >= 1 &&
       record.fallbacks >= 1 &&
-      (record.contextMode !== "conversational" || record.compactions >= 1);
+      (record.contextMode !== "conversational" || record.compactions >= 1) &&
+      (!record.autoResolve || record.forcedDecisions >= 1);
     console.log(ok ? "LLM-GAME (mock): PASS" : "LLM-GAME (mock): FAIL");
     process.exit(ok ? 0 : 1);
   }

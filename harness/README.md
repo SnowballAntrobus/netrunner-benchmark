@@ -33,6 +33,9 @@ npm run llm-game -- --seed 7                  # Claude as Runner (needs ANTHROPI
                                               #   conversational|stateless (default
                                               #   conversational), --history full|lean,
                                               #   --compact-threshold N, --compact-keep N
+                                              # interface knobs: --auto-resolve on|off
+                                              #   (D03, default on: 1-option decisions
+                                              #   skip the API, logged forced)
                                               #   (see docs/PROMPTING.md)
 npm run audit                                 # conservation audit over golden fixtures
 npm run audit -- --file out/<game>.json       # audit any game record

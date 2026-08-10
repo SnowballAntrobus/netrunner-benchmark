@@ -27,6 +27,15 @@
   var llmSeat = params.get("llm"); // "runner" (only supported seat for now)
   if (llmSeat !== "runner") return;
 
+  // D03: auto-resolve single-option decisions (default ON; &autoresolve=0
+  // disables — the game-1-interface comparison arm). A 1-option menu has
+  // exactly one possible outcome; the request is still fully built and
+  // logged (forced: true), the preview-divergence check still runs, but
+  // no API call is made and nothing enters the transcript. Game-1 data:
+  // 601/768 runner decisions (78%) were single-option, consuming 77% of
+  // input tokens and eliciting 18 of 25 retries.
+  var AUTO_RESOLVE = params.get("autoresolve") !== "0";
+
   // The engine's utility.js overrides the global JSON.stringify with a
   // title-collapsing replacer (readable logs). Harness requests must keep
   // full structure — use the pristine stringify captured by harness.html
@@ -236,6 +245,12 @@
     // the model never sees it (it sees the authoritative actual menu).
     if (divergence) request.previewDivergence = divergence;
     var seq = request.seq;
+    // D03: single-option decisions short-circuit at the host (logged as
+    // forced, no API call, no transcript entry). The page-side flow below
+    // is IDENTICAL — the host just answers {option: 0} itself.
+    if (AUTO_RESOLVE && optionList.length === 1) {
+      request.forced = true;
+    }
     return window
       .__harnessDecide(stringify(request))
       .then(function (responseJson) {

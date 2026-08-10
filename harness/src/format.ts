@@ -33,6 +33,7 @@ interface DecisionRow {
   latency_ms: number | null;
   transcript_tokens?: number | null;
   preview_divergence?: { command: string; previewed_at_seq: number; preview: unknown[] } | null;
+  forced?: boolean; // D03: auto-resolved single-option decision (no API call)
   state: { log?: string[]; runner?: { credits?: number; grip?: unknown[]; clicks?: number } } | null;
 }
 
@@ -70,6 +71,11 @@ function optionLabel(o: unknown): string {
   bits.push(primary ?? `option ${d["index"]}`);
   if (d["server"] && !d["label"]) bits.push(`→ ${d["server"]}`);
   if (d["description"] && primary !== d["description"]) bits.push(`— ${d["description"]}`);
+  // D05: command options carry a preview of the follow-up menu — render
+  // it compactly so the review shows what the model saw at the verb step.
+  if (Array.isArray(d["choices"])) {
+    bits.push(`→ (${(d["choices"] as unknown[]).map(optionLabel).join(", ")})`);
+  }
   return bits.join(" ");
 }
 
@@ -274,6 +280,7 @@ export async function formatGame(
     const meta: string[] = [];
     if (d.retries) meta.push(`${d.retries} retries`);
     if (d.fallback) meta.push("FALLBACK");
+    if (full && d.forced) meta.push("auto-resolved");
     if (full && d.latency_ms) meta.push(`${(d.latency_ms / 1000).toFixed(1)}s`);
     const metaStr = meta.length ? ` _( ${meta.join(", ")} )_` : "";
     const lines: string[] = [];
