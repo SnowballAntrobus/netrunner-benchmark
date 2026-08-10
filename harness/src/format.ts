@@ -32,6 +32,7 @@ interface DecisionRow {
   fallback: boolean | null;
   latency_ms: number | null;
   transcript_tokens?: number | null;
+  preview_divergence?: { command: string; previewed_at_seq: number; preview: unknown[] } | null;
   state: { log?: string[]; runner?: { credits?: number; grip?: unknown[]; clicks?: number } } | null;
 }
 
@@ -255,6 +256,9 @@ export async function formatGame(
           : "") +
         (typeof game["compactions"] === "number"
           ? ` · **Compactions:** ${game["compactions"]} (transcript max ${game["transcriptTokensMax"] ?? "?"} tokens)`
+          : "") +
+        (typeof game["previewDivergences"] === "number" && (game["previewDivergences"] as number) > 0
+          ? ` · ⚠️ **Preview divergences:** ${game["previewDivergences"]}`
           : "")
       : "",
     "",
@@ -273,6 +277,15 @@ export async function formatGame(
     if (full && d.latency_ms) meta.push(`${(d.latency_ms / 1000).toFixed(1)}s`);
     const metaStr = meta.length ? ` _( ${meta.join(", ")} )_` : "";
     const lines: string[] = [];
+    // D05 "preview, not promise" cases — surfaced loudly in BOTH views so
+    // divergences can be pulled and analyzed.
+    if (d.preview_divergence) {
+      lines.push(
+        `> ⚠️ **Preview divergence** — this menu differs from the \`${d.preview_divergence.command}\` ` +
+          `preview shown at decision #${d.preview_divergence.previewed_at_seq} ` +
+          `(previewed: [${d.preview_divergence.preview.map(optionLabel).join(" | ")}])`
+      );
+    }
     if (forced && !full) {
       // Abbreviated view: substantive reasoning on a forced step surfaces
       // as a compact thought line; boilerplate was collapsed by the caller.
@@ -323,7 +336,12 @@ export async function formatGame(
       const here = anchors.get(i);
       if (here) {
         for (const d of here) {
-          if (d.options.length === 1 && !full && isBoilerplate(d.reasoning)) {
+          // Never collapse a divergent select — those are exactly the
+          // records the review wants to see.
+          if (
+            d.options.length === 1 && !full && isBoilerplate(d.reasoning) &&
+            !d.preview_divergence
+          ) {
             forcedRun++;
             continue;
           }

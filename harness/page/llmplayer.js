@@ -35,6 +35,10 @@
   var stringify =
     (window.__pristineJSON && window.__pristineJSON.stringify) || JSON.stringify;
 
+  // D05 counters (read into the game record by the host).
+  window.__harness.previewChecks = 0;
+  window.__harness.previewDivergences = 0;
+
   // ---- option serialization ----------------------------------------------
 
   // Fallback descriptions in official (NSG rulebook) terminology for engine
@@ -59,6 +63,110 @@
     remove: "Basic action: remove 1 tag (1 click and 2 credits)",
   };
 
+  // D05 (generalizing D04): dry-run the exact enumeration the engine will
+  // perform if a command is chosen, so every verb-level option previews
+  // the follow-up menu it leads to — the #281 guard ("play" chosen blind,
+  // railroaded into Overclock). Parity, not help: the engine UI shows a
+  // human which cards light up as playable/installable and which servers
+  // are runnable; entries are rendered by the SAME describeOption as the
+  // real follow-up menu (minus index), so preview and menu are identical
+  // in shape. Subjectless commands (gain, draw, ...) enumerate to bare
+  // [{}] and mechanically get no preview. Read-only: these are the same
+  // menu-builder calls the engine performs for human play (verified via
+  // double mock-run byte comparison).
+  function describeCommandChoices(cmd, side) {
+    try {
+      if (
+        !currentPhase ||
+        !currentPhase.Enumerate ||
+        typeof currentPhase.Enumerate[cmd] !== "function"
+      ) {
+        return null;
+      }
+      // RNG guard: card-authored Enumerates may consume seeded randomness
+      // in AI branches (found empirically: the fast-advance operation
+      // Shuffles its target list when corp.AI != null — 3 draws shifted
+      // the whole stream and changed the game). Dry-runs must not consume
+      // the seeded stream, so Math.random is swapped for a local
+      // fixed-seed LCG for the duration of the enumeration: the game
+      // stream is untouched and previews stay run-to-run deterministic.
+      var seededRandom = Math.random;
+      var localRng = 987654321;
+      Math.random = function () {
+        localRng = (localRng * 48271) % 2147483647;
+        return localRng / 2147483648;
+      };
+      var choices;
+      try {
+        choices = currentPhase.Enumerate[cmd]();
+      } finally {
+        Math.random = seededRandom;
+      }
+      if (!choices || !choices.length) return null;
+      var out = [];
+      var hasContent = false;
+      for (var i = 0; i < choices.length; i++) {
+        var entry = describeOption(choices[i], side, i);
+        delete entry.index; // previews carry no index — not a commitment
+        for (var k in entry) {
+          if (Object.prototype.hasOwnProperty.call(entry, k)) hasContent = true;
+        }
+        out.push(entry);
+      }
+      if (!hasContent) return null; // subjectless — nothing to preview
+      return out;
+    } catch (e) {
+      return null; // enrichment must never break a decision
+    }
+  }
+
+  // ---- preview-divergence tracking (D05) ----------------------------------
+  // A preview is computed at command-decision time; the eventual follow-up
+  // menu could in rare cases differ (e.g. a response window between the two
+  // steps changing affordability). Every followed preview is compared
+  // against the actual follow-up menu; mismatches are flagged on the select
+  // decision's record for analysis. The MODEL is never shown the marker —
+  // it sees the (authoritative) actual menu anyway.
+
+  var pendingPreview = { runner: null, corp: null }; // per-seat {command, preview, seq}
+
+  function stripIndex(described) {
+    return described.map(function (o) {
+      var copy = {};
+      for (var k in o) {
+        if (Object.prototype.hasOwnProperty.call(o, k) && k !== "index") copy[k] = o[k];
+      }
+      return copy;
+    });
+  }
+
+  // On a select decision: compare the pending preview (if any) with the
+  // actual menu; always clears pending. On any other decision type the
+  // stale preview is dropped.
+  function checkPreviewDivergence(seat, decisionType, described) {
+    var pending = pendingPreview[seat];
+    pendingPreview[seat] = null;
+    if (!pending || decisionType !== "select") return null;
+    window.__harness.previewChecks++;
+    if (stringify(stripIndex(described)) === stringify(pending.preview)) return null;
+    window.__harness.previewDivergences++;
+    return {
+      command: pending.command,
+      previewed_at_seq: pending.seq,
+      preview: pending.preview,
+    };
+  }
+
+  // After a command decision resolves: if the chosen option carried a
+  // preview, remember it for comparison against the next select.
+  function notePreviewFromChoice(seat, decisionType, described, idx, seq) {
+    if (decisionType !== "command") return;
+    var chosen = described[idx];
+    if (chosen && chosen.choices) {
+      pendingPreview[seat] = { command: chosen.command, preview: chosen.choices, seq: seq };
+    }
+  }
+
   function describeOption(option, side, index) {
     var out = { index: index };
     if (typeof option === "string") {
@@ -69,6 +177,8 @@
       } else if (COMMAND_GLOSSARY[option]) {
         out.description = COMMAND_GLOSSARY[option];
       }
+      var choices = describeCommandChoices(option, side);
+      if (choices) out.choices = choices;
       return out;
     }
     // SelectChoice: parameter objects
@@ -107,6 +217,8 @@
 
   function decide(decisionType, optionList) {
     window.__harness.decisions++;
+    var described = describeOptions(optionList, llmSeat);
+    var divergence = checkPreviewDivergence(llmSeat, decisionType, described);
     var request = {
       seat: llmSeat,
       decisionType: decisionType,
@@ -116,10 +228,14 @@
       phase: currentPhase
         ? { identifier: currentPhase.identifier, title: currentPhase.title }
         : null,
-      options: describeOptions(optionList, llmSeat),
+      options: described,
       state: window.__harness.stateFor(llmSeat),
       reproductionCode: safeReproductionCode(),
     };
+    // Analysis marker only — buildDecisionMessage never includes it, so
+    // the model never sees it (it sees the authoritative actual menu).
+    if (divergence) request.previewDivergence = divergence;
+    var seq = request.seq;
     return window
       .__harnessDecide(stringify(request))
       .then(function (responseJson) {
@@ -138,10 +254,12 @@
           );
           idx = 0;
         }
+        notePreviewFromChoice(llmSeat, decisionType, described, idx, seq);
         return idx;
       })
       .catch(function (e) {
         window.__harness.errors.push("llmplayer: bridge failure: " + String(e));
+        notePreviewFromChoice(llmSeat, decisionType, described, 0, seq);
         return 0; // keep the game alive; the incident is recorded
       });
   }
@@ -160,27 +278,35 @@
       ai.prototype[m] = function (optionList) {
         var self = this;
         var described = describeOptions(optionList, seat);
+        // Same divergence tracking as the LLM seat — the corp stream is
+        // host-side analysis data, and preview drift is equally worth
+        // surfacing there.
+        var divergence = checkPreviewDivergence(seat, decisionType, described);
         var reproductionCode = safeReproductionCode();
         var phase = currentPhase
           ? { identifier: currentPhase.identifier, title: currentPhase.title }
           : null;
         var turn = window.__harness.turn;
         var result = orig.apply(self, arguments);
+        // Read AFTER orig ran: bootstrap's inner counting wrap increments
+        // the decision counter synchronously at call time.
+        var seq = window.__harness.decisions;
         return Promise.resolve(result).then(function (idx) {
+          notePreviewFromChoice(seat, decisionType, described, idx, seq);
           try {
-            window.__harnessLogDecision(
-              stringify({
-                seat: seat,
-                decisionType: decisionType,
-                logIndex: typeof capturedLog !== "undefined" ? capturedLog.length : null,
-                seq: window.__harness.decisions,
-                turn: turn,
-                phase: phase,
-                options: described,
-                choice: idx,
-                reproductionCode: reproductionCode,
-              })
-            );
+            var logged = {
+              seat: seat,
+              decisionType: decisionType,
+              logIndex: typeof capturedLog !== "undefined" ? capturedLog.length : null,
+              seq: seq,
+              turn: turn,
+              phase: phase,
+              options: described,
+              choice: idx,
+              reproductionCode: reproductionCode,
+            };
+            if (divergence) logged.previewDivergence = divergence;
+            window.__harnessLogDecision(stringify(logged));
           } catch (e) {
             /* logging must never break the game */
           }

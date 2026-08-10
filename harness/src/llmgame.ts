@@ -79,6 +79,14 @@ export interface DecisionRecord {
   /** D01: compaction epoch this decision was made in (0 = before the first
    *  compaction); null when stateless. */
   compaction_id: number | null;
+  /** D05: set on a select decision whose menu differed from the preview
+   *  attached to the chosen command — the "preview, not promise" cases,
+   *  surfaced for analysis. Null otherwise. */
+  preview_divergence: {
+    command: string;
+    previewed_at_seq: number;
+    preview: unknown[];
+  } | null;
 }
 
 /** D01: compaction events are first-class records in the same JSONL stream —
@@ -115,6 +123,10 @@ export interface LLMGameRecord extends GameRecord {
   fallbacks: number;
   compactions: number;
   transcriptTokensMax: number;
+  /** D05: previews followed into their select (comparisons made) and how
+   *  many diverged. Divergent selects carry `preview_divergence`. */
+  previewChecks: number;
+  previewDivergences: number;
   usage: Usage;
   decisionLogPath: string;
   invalidRecords: number;
@@ -201,18 +213,30 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
     fallbacks: 0,
     compactions: 0,
     transcriptTokensMax: 0,
+    previewChecks: 0,
+    previewDivergences: 0,
     usage: { tokensIn: 0, tokensOut: 0, cacheRead: 0, cacheWrite: 0 },
     decisionLogPath,
     invalidRecords: 0,
   };
 
+  // Appends are serialized through a promise chain: concurrent bridge
+  // calls (e.g. back-to-back corp decisions) otherwise race appendFile and
+  // adjacent records land in nondeterministic file order — surfaced by
+  // D04's double-run comparison. Record ORDER in the file now matches
+  // write order deterministically.
+  let writeQueue: Promise<void> = Promise.resolve();
+  const appendRecord = (json: string): Promise<void> => {
+    writeQueue = writeQueue.then(() => appendFile(decisionLogPath, json + "\n"));
+    return writeQueue;
+  };
   const writeDecision = async (r: DecisionRecord): Promise<void> => {
     const problems = validateDecisionRecord(r);
     if (problems.length > 0) {
       record.invalidRecords++;
       record.errors.push(`invalid decision record seq=${r.seq}: ${problems.join("; ")}`);
     }
-    await appendFile(decisionLogPath, JSON.stringify(r) + "\n");
+    await appendRecord(JSON.stringify(r));
   };
 
   const staticServer = await startServer(repoRoot);
@@ -266,7 +290,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
           record.usage.tokensOut += summary.usage.tokensOut;
           record.usage.cacheRead += summary.usage.cacheRead;
           record.usage.cacheWrite += summary.usage.cacheWrite;
-          await appendFile(decisionLogPath, JSON.stringify(compactionRecord) + "\n");
+          await appendRecord(JSON.stringify(compactionRecord));
         } catch (e) {
           apiAborted = true;
           record.errors.push(`API failure at compaction (seq ${request.seq}): ${String(e)}`);
@@ -333,6 +357,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
         reproduction_code: request.reproductionCode,
         transcript_tokens: transcript ? result.promptTokens : null,
         compaction_id: transcript ? transcript.compactions : null,
+        preview_divergence: request.previewDivergence ?? null,
       });
       return JSON.stringify({ option: result.option });
     });
@@ -365,6 +390,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
         reproduction_code: r.reproductionCode,
         transcript_tokens: null,
         compaction_id: null,
+        preview_divergence: r.previewDivergence ?? null,
       });
     });
 
@@ -452,12 +478,26 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
 
-    record.log = (await page.evaluate(() => {
+    const finals = (await page.evaluate(() => {
       const h = (
-        window as unknown as { __harness: { log: () => string[]; logAtWin?: string[] } }
+        window as unknown as {
+          __harness: {
+            log: () => string[];
+            logAtWin?: string[];
+            previewChecks?: number;
+            previewDivergences?: number;
+          };
+        }
       ).__harness;
-      return h.logAtWin ?? h.log();
-    })) as string[];
+      return {
+        log: h.logAtWin ?? h.log(),
+        previewChecks: h.previewChecks ?? 0,
+        previewDivergences: h.previewDivergences ?? 0,
+      };
+    })) as { log: string[]; previewChecks: number; previewDivergences: number };
+    record.log = finals.log;
+    record.previewChecks = finals.previewChecks;
+    record.previewDivergences = finals.previewDivergences;
   } catch (e) {
     record.errors.push(`host: ${String(e)}`);
   } finally {

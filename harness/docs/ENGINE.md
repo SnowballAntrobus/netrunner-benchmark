@@ -78,6 +78,19 @@ in CI by `cli.ts determinism`, which plays the same seed twice and diffs logs.
    headless (stall, not nondeterminism — noted here because it must stay
    disabled). Bootstrap unchecks `#narration`.
 
+One more entry in the ledger (D05): **card-authored Enumerate
+implementations may consume seeded RNG in AI-only branches** — the
+fast-advance operation Shuffles its target list when `corp.AI != null`.
+Harness dry-runs of `currentPhase.Enumerate[cmd]()` (the D04/D05 option
+previews) therefore swap `Math.random` for a local fixed-seed LCG for
+the duration of the call (restored in `finally`): the seeded game
+stream cannot be consumed by preview enumeration no matter what card
+code does. Acceptance for any engine-touching enrichment is
+baseline-equality: the enrichment-active mock game must be
+byte-identical (normalized log) to the no-enrichment baseline —
+on-vs-on double runs alone cannot detect enrichment-induced
+perturbation (both runs perturb identically).
+
 ## Golden-log fixtures (M2)
 
 `fixtures/golden/manifest.json` defines 10 seeded matchups covering all

@@ -134,6 +134,11 @@ Decision types:
 - "select": choose the parameter for the action (which card, which server,
   which subroutine, etc.). Option entries carry the card/server details.
 
+Command options that lead to a follow-up choice include a "choices" list
+previewing that follow-up menu (e.g. "play" lists the events you could
+currently play; "run" lists the servers). Previews are computed at the
+moment the menu is shown; the follow-up decision itself is authoritative.
+
 Multi-step actions arrive as chains: e.g. command "run" then select the
 server. Your state JSON shows "run" context while a run is in progress.
 
@@ -210,6 +215,15 @@ export interface PageDecisionRequest {
   options: Record<string, unknown>[];
   state: Record<string, unknown>;
   reproductionCode: string | null;
+  /** D05 analysis marker (select decisions only): set when the follow-up
+   *  menu differs from the preview attached to the chosen command.
+   *  NEVER included in the decision message — the model sees the
+   *  authoritative actual menu, not this. */
+  previewDivergence?: {
+    command: string;
+    previewed_at_seq: number;
+    preview: unknown[];
+  };
 }
 
 function decisionHeader(request: PageDecisionRequest): string {

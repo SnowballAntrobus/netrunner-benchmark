@@ -49,6 +49,14 @@ chance to react, and "n" declining it.
     {"index": 2, "label": "Archives", "server": "Archives"},
     {"index": 3, "label": "Remote 0", "server": "Remote 0"}
   ],
+                                   // D04/D05: command options that lead
+                                   //   to a follow-up choice carry
+                                   //   "choices": a preview of that menu
+                                   //   (entries as the real menu renders
+                                   //   them, minus index) — the same
+                                   //   enumeration the engine performs if
+                                   //   the command is chosen. Subjectless
+                                   //   commands (gain, draw...) carry none.
   "choice": 1,                     // index actually executed
   "reasoning": "R&D pressure ...", // the model's stated reasoning (logged,
                                    //   never shown to the opponent)
@@ -67,8 +75,17 @@ chance to react, and "n" declining it.
                                    //   conversation + decision) for this
                                    //   call. null on corp records and in
                                    //   --context stateless
-  "compaction_id": 0               // D01: compaction epoch (0 = before the
+  "compaction_id": 0,              // D01: compaction epoch (0 = before the
                                    //   first compaction). null if stateless
+  "preview_divergence": null       // D05: on a SELECT decision, set to
+                                   //   {command, previewed_at_seq, preview}
+                                   //   when this menu differs from the
+                                   //   preview shown on the chosen command
+                                   //   — the "preview, not promise" cases,
+                                   //   surfaced for analysis (⚠️ in both
+                                   //   formatter views, counted in the
+                                   //   game record, never shown to the
+                                   //   model)
 }
 ```
 

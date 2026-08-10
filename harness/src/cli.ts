@@ -178,11 +178,15 @@ if (command === "run-game") {
     `cacheRead=${record.usage.cacheRead} cacheWrite=${record.usage.cacheWrite} ` +
     `compactions=${record.compactions} transcriptMax=${record.transcriptTokensMax}`
   );
+  console.log(
+    `previews followed=${record.previewChecks} diverged=${record.previewDivergences}` +
+    (record.previewDivergences > 0 ? "  <-- inspect preview_divergence records" : "")
+  );
   console.log(`decision log: ${record.decisionLogPath}`);
   if (model === "mock") {
     // CI acceptance: the mock injects one transient and one persistent
     // malformed response — both retry and fallback paths must have been
-    // exercised — and (conversational default) the synthetic mock usage
+    // exercised — (conversational default) the synthetic mock usage
     // must have driven at least one compaction, keylessly.
     const ok =
       record.status === "completed" &&
