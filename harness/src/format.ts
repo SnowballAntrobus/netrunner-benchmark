@@ -34,6 +34,8 @@ interface DecisionRow {
   transcript_tokens?: number | null;
   preview_divergence?: { command: string; previewed_at_seq: number; preview: unknown[] } | null;
   forced?: boolean; // D03: auto-resolved single-option decision (no API call)
+  compound?: boolean; // D09: options were the fused menu
+  compound_fulfilled?: boolean; // D09: select auto-answered from the fused choice
   state: {
     log?: string[];
     runner?: { credits?: number; grip?: unknown[]; clicks?: number; agendaPoints?: number };
@@ -73,6 +75,13 @@ function optionLabel(o: unknown): string {
     (card["hidden"] ? "(hidden card)" : undefined) ??
     (d["text"] as string);
   bits.push(primary ?? `option ${d["index"]}`);
+  // D09: fused entries pair a verb with its subject (command + label/card) —
+  // show the subject so "run Archives" and "run HQ" read distinctly.
+  if (d["command"] && d["label"] && primary === d["command"]) {
+    bits.push(String(d["label"]));
+  } else if (d["command"] && card["title"] && primary === d["command"]) {
+    bits.push(String(card["title"]));
+  }
   if (d["server"] && !d["label"]) bits.push(`→ ${d["server"]}`);
   if (d["description"] && primary !== d["description"]) bits.push(`— ${d["description"]}`);
   // D05: command options carry a preview of the follow-up menu — render
@@ -319,6 +328,7 @@ export async function formatGame(
     if (d.retries) meta.push(`${d.retries} retries`);
     if (d.fallback) meta.push("FALLBACK");
     if (full && d.forced) meta.push("auto-resolved");
+    if (full && d.compound_fulfilled) meta.push("compound-fulfilled");
     if (full && d.latency_ms) meta.push(`${(d.latency_ms / 1000).toFixed(1)}s`);
     const metaStr = meta.length ? ` _( ${meta.join(", ")} )_` : "";
     const lines: string[] = [];
@@ -384,8 +394,8 @@ export async function formatGame(
           // Never collapse a divergent select — those are exactly the
           // records the review wants to see.
           if (
-            d.options.length === 1 && !full && isBoilerplate(d.reasoning) &&
-            !d.preview_divergence
+            ((d.options.length === 1 && isBoilerplate(d.reasoning)) || d.compound_fulfilled) &&
+            !full && !d.preview_divergence
           ) {
             forcedRun++;
             continue;

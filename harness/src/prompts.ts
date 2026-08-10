@@ -125,22 +125,16 @@ legality for you — every listed option is legal; nothing else is possible.
 
 Decision types:
 - "command": top-level actions. Common commands: "gain" = click for 1
-  credit; "draw" = click to draw; "install"/"play" = start installing or
-  playing a card (you pick which card in a follow-up decision); "run" =
-  start a run (server chosen in a follow-up); "trigger" = use a card
-  ability; "remove tag"; "jack" = jack out of the run; "n" = continue /
+  credit; "draw" = click to draw; "install"/"play" = install or play a
+  card; "run" = make a run; "trigger" = use a card ability;
+  "remove tag"; "jack" = jack out of the run; "n" = continue /
   decline / pass priority (very common — choose it when you don't want to
   act in a response window).
 - "select": choose the parameter for the action (which card, which server,
   which subroutine, etc.). Option entries carry the card/server details.
+ACTIONS_MODE_PARAGRAPH
 
-Command options that lead to a follow-up choice include a "choices" list
-previewing that follow-up menu (e.g. "play" lists the events you could
-currently play; "run" lists the servers). Previews are computed at the
-moment the menu is shown; the follow-up decision itself is authoritative.
-
-Multi-step actions arrive as chains: e.g. command "run" then select the
-server. Your state JSON shows "run" context while a run is in progress.
+Your state JSON shows "run" context while a run is in progress.
 
 Notation: card text and log lines use bracket icons: [c] = credit,
 [click] = click, [sub] = subroutine, [mu] = memory unit, [trash] = trash
@@ -172,12 +166,31 @@ context limit, you will be asked to write a summary for your future self,
 and play continues from that summary plus your most recent exchanges
 verbatim.`;
 
+/** D09: the actions-mode paragraph of the interface guide — worded for
+ *  whichever protocol the model actually faces; recorded in the saved
+ *  system prompt like every authored word. */
+export const ACTIONS_PARAGRAPHS = {
+  compound:
+    "\nCommand options that carry a subject are COMPLETE actions: choosing\n" +
+    '"install" with a named card installs that card; "run" with a server\n' +
+    'runs that server; "trigger" with an ability uses it. Follow-up\n' +
+    '"select" decisions appear only when a further choice remains (where\n' +
+    "to host, what to trash for memory, and so on).",
+  split:
+    "\nCommand options that lead to a follow-up choice include a \"choices\"\n" +
+    "list previewing that follow-up menu (e.g. \"play\" lists the events you\n" +
+    "could currently play). Previews are computed at the moment the menu\n" +
+    "is shown; the follow-up decision itself is authoritative. Multi-step\n" +
+    'actions arrive as chains: e.g. command "run" then select the server.',
+};
+
 export function buildSystemPrompt(
   runnerReference: string,
   corpReference: string,
   rulesText: string = RULES_DIGEST,
   profile: PromptProfile = { ...PROFILES["neutral"]!, reasoningStyle: "brief" },
-  contextMode: "conversational" | "stateless" = "conversational"
+  contextMode: "conversational" | "stateless" = "conversational",
+  actionsMode: "compound" | "split" = "compound"
 ): string {
   // The digest's "Strategic basics" section is harness-authored advice;
   // strip it under hint-free profiles. Official rules text keeps its own
@@ -191,7 +204,8 @@ export function buildSystemPrompt(
     "",
     rules,
     "",
-    INTERFACE_GUIDE + (contextMode === "conversational" ? CONVERSATIONAL_NOTE : ""),
+    INTERFACE_GUIDE.replace("ACTIONS_MODE_PARAGRAPH", ACTIONS_PARAGRAPHS[actionsMode]) +
+      (contextMode === "conversational" ? CONVERSATIONAL_NOTE : ""),
     REASONING_DIRECTIVES[profile.reasoningStyle],
     "",
     "# Card reference (open decklists)",
@@ -227,6 +241,12 @@ export interface PageDecisionRequest {
   /** D03: single-option decision auto-resolved at the page layer — the
    *  host logs it (no API call, no transcript entry) and answers 0. */
   forced?: boolean;
+  /** D09: this command menu was FUSED (options are complete actions). */
+  compound?: boolean;
+  /** D09: this select fulfills a prior compound choice — host records it
+   *  and answers compoundChoice; no API call, no transcript entry. */
+  compoundFulfilled?: boolean;
+  compoundChoice?: number;
 }
 
 function decisionHeader(request: PageDecisionRequest): string {

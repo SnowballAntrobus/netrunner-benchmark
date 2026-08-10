@@ -35,7 +35,10 @@ npm run llm-game -- --seed 7                  # Claude as Runner (needs ANTHROPI
                                               #   --compact-threshold N, --compact-keep N
                                               # interface knobs: --auto-resolve on|off
                                               #   (D03, default on: 1-option decisions
-                                              #   skip the API, logged forced)
+                                              #   skip the API, logged forced),
+                                              #   --actions compound|split (D09, default
+                                              #   compound: verb+subject fused into one
+                                              #   menu, follow-up select auto-fulfilled)
                                               # instruments: --debrief on|off (D07,
                                               #   default on: postgame self-report to
                                               #   <game>-debrief.json, zero-contamination)

@@ -9,10 +9,14 @@
  *                   [--profile neutral|expert] [--reasoning brief|extended|scot|none]
  *                   [--context conversational|stateless] [--history full|lean]
  *                   [--compact-threshold N] [--compact-keep N]
- *                   [--auto-resolve on|off] [--debrief on|off] [--seed N] ...
+ *                   [--auto-resolve on|off] [--debrief on|off]
+ *                   [--actions compound|split] [--seed N] ...
  *    tsx src/cli.ts fetch-rules              # snapshot NSG learn-to-play guides
  *    tsx src/cli.ts audit [--file <game.json>] # conservation audit (default: golden fixtures)
  *    tsx src/cli.ts format --file <game.json>  # markdown game narratives (.report.md + .full.md)
+ *    tsx src/cli.ts replay --file <game.json> [--seq N]        # replay viewer (D08): serves
+ *                   [--screenshot out.png]                     # the board+reasoning stepper,
+ *                                                              # or renders one moment to PNG
  *
  *  Game records are written to harness/out/ as JSON; batch also writes a
  *  summary. Exit code is non-zero on any failed acceptance condition.
@@ -165,6 +169,7 @@ if (command === "run-game") {
     compactionKeepTurns: parseInt(arg("compact-keep", "20"), 10),
     autoResolve: arg("auto-resolve", "on") !== "off",
     debrief: arg("debrief", "on") !== "off",
+    actions: arg("actions", "compound") === "split" ? "split" as const : "compound" as const,
     outDir,
   });
   console.log(summarize(record));
@@ -172,8 +177,9 @@ if (command === "run-game") {
     `model=${record.model} rules=${record.rulesSource} profile=${record.promptProfile}/` +
     `${record.reasoningStyle} context=${record.contextMode}` +
     (record.historyVariant ? `/${record.historyVariant}` : "") +
-    ` autoResolve=${record.autoResolve ? "on" : "off"}` +
+    ` autoResolve=${record.autoResolve ? "on" : "off"} actions=${record.actions}` +
     ` llmDecisions=${record.llmDecisions} forced=${record.forcedDecisions} ` +
+    `fulfilled=${record.compoundFulfilled} ` +
     `rulesDecisions=${record.rulesDecisions} retries=${record.retriesTotal} ` +
     `fallbacks=${record.fallbacks} invalidRecords=${record.invalidRecords}`
   );
@@ -195,6 +201,29 @@ if (command === "run-game") {
     // have driven at least one compaction, (auto-resolve default) at
     // least one forced record must exist, and (debrief default) the
     // debrief artifact must have been written, all keylessly.
+    // D10 acceptance: the injected transient-bad decision must carry ONE
+    // recorded failed attempt classified out-of-range; the persistent-
+    // garbage decision three unparseable/missing-option attempts.
+    const jsonlRows = (await readFile(record.decisionLogPath, "utf-8"))
+      .split("\n")
+      .filter((l) => l.trim() !== "")
+      .map((l) => JSON.parse(l) as {
+        record_type?: string;
+        failed_attempts?: { problem: string }[] | null;
+        fallback?: boolean | null;
+      });
+    const withFailures = jsonlRows.filter(
+      (r) => (r.record_type ?? "decision") === "decision" && r.failed_attempts?.length
+    );
+    const transientOk = withFailures.some(
+      (r) => r.failed_attempts!.length === 1 && r.failed_attempts![0]!.problem === "out-of-range"
+    );
+    const persistentOk = withFailures.some(
+      (r) =>
+        r.fallback === true &&
+        r.failed_attempts!.length === 3 &&
+        r.failed_attempts!.every((a) => a.problem === "unparseable" || a.problem === "missing-option")
+    );
     const ok =
       record.status === "completed" &&
       record.invalidRecords === 0 &&
@@ -203,7 +232,14 @@ if (command === "run-game") {
       (record.contextMode !== "conversational" || record.compactions >= 1) &&
       (!record.autoResolve || record.forcedDecisions >= 1) &&
       (!record.debrief || record.contextMode !== "conversational" ||
-        record.debriefPath !== null);
+        record.debriefPath !== null) &&
+      (record.actions !== "compound" || record.compoundFulfilled >= 1) &&
+      transientOk &&
+      persistentOk;
+    console.log(
+      `failed-attempt records: ${withFailures.length} ` +
+      `(transient=${transientOk ? "ok" : "MISSING"} persistent=${persistentOk ? "ok" : "MISSING"})`
+    );
     console.log(ok ? "LLM-GAME (mock): PASS" : "LLM-GAME (mock): FAIL");
     process.exit(ok ? 0 : 1);
   }
@@ -219,6 +255,57 @@ if (command === "run-game") {
   const written = await writeFormatted(file, existsSync(jsonl) ? jsonl : null);
   for (const w of written) console.log(w);
   process.exit(0);
+} else if (command === "replay") {
+  const file = arg("file", "");
+  if (!file) {
+    console.error("replay requires --file <game.json>");
+    process.exit(2);
+  }
+  const { relative, sep } = await import("node:path");
+  const abs = resolve(file);
+  const jsonlAbs = abs.replace(/\.json$/, ".jsonl");
+  const rel = (p: string): string => "/" + relative(repoRoot, p).split(sep).join("/");
+  const { startServer } = await import("./server.js");
+  const staticServer = await startServer(repoRoot);
+  const seqArg = arg("seq", "");
+  // Boot the engine with the game's own precon decks (avoids the slow
+  // random deck builder; the boot decks are deleted by the first RC eval).
+  const { loadPrecon, encodeDeckParam } = await import("./precons.js");
+  const gameRec = JSON.parse(await readFile(abs, "utf-8")) as {
+    corpPrecon?: string;
+    runnerPrecon?: string;
+  };
+  const [replayCorpDeck, replayRunnerDeck] = await Promise.all([
+    loadPrecon(repoRoot, gameRec.corpPrecon ?? "Gateway Corp"),
+    loadPrecon(repoRoot, gameRec.runnerPrecon ?? "Gateway Runner"),
+  ]);
+  const url =
+    `http://127.0.0.1:${staticServer.port}/harness/inspect.html` +
+    `?src=${encodeURIComponent(rel(jsonlAbs))}&game=${encodeURIComponent(rel(abs))}` +
+    `&c=${encodeDeckParam(replayCorpDeck)}&r=${encodeDeckParam(replayRunnerDeck)}` +
+    (seqArg ? `&seq=${seqArg}` : "");
+  const shot = arg("screenshot", "");
+  if (shot) {
+    const browser = await launchBrowser();
+    const page = await browser.newPage();
+    await page.setViewportSize({ width: 1720, height: 980 });
+    await page.goto(url + "&shot=1", { waitUntil: "load" });
+    await page.waitForFunction(
+      () => (window as unknown as { __inspectReady?: boolean }).__inspectReady === true,
+      undefined,
+      { timeout: 120_000 }
+    );
+    await page.waitForTimeout(1500); // settle sprites/text rendering
+    await page.screenshot({ path: shot });
+    await browser.close();
+    await staticServer.close();
+    console.log(`screenshot: ${shot}`);
+    process.exit(0);
+  }
+  console.log("Replay viewer running:");
+  console.log(`  ${url}`);
+  console.log("Open in a browser; ← → keys step decisions. Ctrl-C to stop.");
+  await new Promise(() => { /* stay up until interrupted */ });
 } else if (command === "audit") {
   const file = arg("file", "");
   const results = file ? [await auditFile(repoRoot, file)] : await auditGolden(repoRoot);

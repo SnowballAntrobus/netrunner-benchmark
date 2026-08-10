@@ -46,6 +46,7 @@ basis, failure modes, and the variant analysis live in
 | `--history` | full / lean | full | what a PAST decision's user turn keeps: the complete message (variant A) or header+options only (variant B — past board positions then live only in the model's own words) |
 | `--compact-threshold` | tokens | 150000 | compact when the observed request size crosses this — a PER-MODEL knob (see "Choosing the threshold" below) |
 | `--compact-keep` | exchanges | 20 | exchanges kept verbatim through a compaction reset |
+| `--actions` | compound / split | compound | D09: fuse verb+subject into single menu entries ("run Archives"), page auto-fulfills the follow-up select — vs the raw two-question protocol as the ablation arm. The interface guide swaps a mode-matched paragraph so each arm gets an honest description of its own protocol |
 
 ### Choosing the threshold (per-model knob)
 

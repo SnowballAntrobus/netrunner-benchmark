@@ -330,6 +330,13 @@ export class Transcript {
 
 // ---- retry bridge ----------------------------------------------------------
 
+/** D10: a FAILED attempt, kept for forensics (game 2's 28 retries were
+ *  unexplainable because only accepted attempts were recorded). */
+export interface FailedAttempt {
+  raw: string;
+  problem: "unparseable" | "missing-option" | "out-of-range";
+}
+
 export interface BridgeResult {
   option: number;
   reasoning: string;
@@ -341,9 +348,27 @@ export interface BridgeResult {
   /** Request size (input + cache read + cache write) of the LAST attempt —
    *  the observed transcript-plus-decision footprint driving compaction. */
   promptTokens: number;
+  /** D10: failed attempts in order (empty when first attempt succeeded —
+   *  the overwhelming majority). The accepted attempt stays in `raw`. */
+  attempts: FailedAttempt[];
 }
 
 const MAX_ATTEMPTS = 3;
+
+/** D10 classification of a failed attempt. `parsed` null with raw that is
+ *  a JSON OBJECT means the tool input existed but carried no usable
+ *  option; non-object raw is unparseable output; a parsed-but-invalid
+ *  index is out-of-range. */
+function classifyFailure(parsed: { option: number } | null, raw: string): FailedAttempt["problem"] {
+  if (parsed !== null) return "out-of-range";
+  try {
+    const v: unknown = JSON.parse(raw);
+    if (v !== null && typeof v === "object" && !Array.isArray(v)) return "missing-option";
+  } catch {
+    /* not JSON at all */
+  }
+  return "unparseable";
+}
 
 /** Retry loop: malformed or out-of-range responses get one corrective
  *  follow-up message per retry; after MAX_ATTEMPTS, fall back to option 0
@@ -366,6 +391,7 @@ export async function decideWithRetries(
   ];
   let lastRaw = "";
   let promptTokens = 0;
+  const attempts: FailedAttempt[] = [];
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
     const result = await client.chooseOption(system, messages, {
       callIndex,
@@ -393,8 +419,10 @@ export async function decideWithRetries(
         usage,
         latencyMs: Date.now() - startedAt,
         promptTokens,
+        attempts,
       };
     }
+    attempts.push({ raw: result.raw, problem: classifyFailure(result.parsed, result.raw) });
     messages.push(
       { role: "assistant", content: result.raw || "(empty)" },
       {
@@ -415,5 +443,6 @@ export async function decideWithRetries(
     usage,
     latencyMs: Date.now() - startedAt,
     promptTokens,
+    attempts,
   };
 }

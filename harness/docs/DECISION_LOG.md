@@ -25,6 +25,14 @@ seq N, then `select: HQ/R&D/...` at seq N+1. Response windows produce many
 one-option or `n`-heavy command decisions — that's the engine offering the
 chance to react, and "n" declining it.
 
+Since D09 (compound mode, the default), the MODEL usually answers both
+layers at once: the command menu it sees has verb+subject fused into
+single entries ("run Archives"), the record carries `compound: true`,
+and the follow-up select record is answered by the page from that same
+choice (`compound_fulfilled: true`, no API call). The engine's two-layer
+protocol is unchanged — both records still appear, in order. `--actions
+split` restores the two-question presentation as an ablation arm.
+
 ## An annotated record (Runner seat)
 
 ```jsonc
@@ -84,6 +92,30 @@ chance to react, and "n" declining it.
                                    //   null. ~78% of decisions. The game
                                    //   record splits llmDecisions (API)
                                    //   from forcedDecisions.
+  "failed_attempts": null,         // D10: when retries occurred, the
+                                   //   FAILED attempts in order:
+                                   //   [{raw, problem}] with problem ∈
+                                   //   unparseable | missing-option |
+                                   //   out-of-range. The accepted attempt
+                                   //   stays in raw_response. Null on
+                                   //   clean/corp/forced records (and all
+                                   //   game-1/2 records, which predate it)
+  "compound": false,               // D09: true = this COMMAND decision
+                                   //   showed the model a FUSED menu
+                                   //   (verb+subject pairs as single
+                                   //   entries). options[] is the fused
+                                   //   menu as shown; choice indexes it.
+                                   //   Absent/false in split mode and on
+                                   //   pre-D09 games
+  "compound_fulfilled": false,     // D09: true = this SELECT decision was
+                                   //   answered by the page from the fused
+                                   //   choice just made — full record, NO
+                                   //   API call, model fields null (like
+                                   //   forced). The game record splits
+                                   //   these out as compoundFulfilled.
+                                   //   Deeper follow-ups (e.g. the server
+                                   //   choice after "play Jailbreak") still
+                                   //   reach the model as real selects
   "preview_divergence": null       // D05: on a SELECT decision, set to
                                    //   {command, previewed_at_seq, preview}
                                    //   when this menu differs from the

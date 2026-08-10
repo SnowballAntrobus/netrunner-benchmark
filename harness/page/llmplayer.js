@@ -36,6 +36,15 @@
   // input tokens and eliciting 18 of 25 retries.
   var AUTO_RESOLVE = params.get("autoresolve") !== "0";
 
+  // D09: compound action menus (default ON; &actions=split disables — the
+  // game-1/2-interface comparison arm). Subject-taking command options are
+  // expanded into complete actions using their D05 previews; the engine's
+  // follow-up select is answered by the page by matching the chosen
+  // subject. Mismatch falls back to a REAL select decision (and D05's
+  // divergence flag fires via the usual check) — fusion can never wedge.
+  var COMPOUND = params.get("actions") !== "split";
+  var pendingCompound = null; // {subject: <stripped preview entry>}
+
   // The engine's utility.js overrides the global JSON.stringify with a
   // title-collapsing replacer (readable logs). Harness requests must keep
   // full structure — use the pristine stringify captured by harness.html
@@ -222,12 +231,79 @@
     }
   }
 
+  // ---- compound fusing (D09) ----------------------------------------------
+
+  function stripEntry(o) {
+    var copy = {};
+    for (var k in o) {
+      if (Object.prototype.hasOwnProperty.call(o, k) && k !== "index" && k !== "choices") copy[k] = o[k];
+    }
+    return copy;
+  }
+
+  // Fuse a described command menu: each preview choice becomes a complete
+  // action entry; preview-less options pass through. Returns
+  // {options, map: fusedIdx -> {verbIndex, subject|null}}.
+  function fuseCommandMenu(described) {
+    var options = [];
+    var map = [];
+    for (var i = 0; i < described.length; i++) {
+      var o = described[i];
+      if (o.choices && o.choices.length) {
+        for (var j = 0; j < o.choices.length; j++) {
+          var entry = { index: options.length, command: o.command };
+          if (o.description) entry.description = o.description;
+          var subj = o.choices[j];
+          for (var k in subj) {
+            if (Object.prototype.hasOwnProperty.call(subj, k)) entry[k] = subj[k];
+          }
+          options.push(entry);
+          map.push({ verbIndex: o.index, subject: stripEntry(subj) });
+        }
+      } else {
+        var plain = {};
+        for (var k2 in o) {
+          if (Object.prototype.hasOwnProperty.call(o, k2)) plain[k2] = o[k2];
+        }
+        plain.index = options.length;
+        options.push(plain);
+        map.push({ verbIndex: o.index, subject: null });
+      }
+    }
+    return { options: options, map: map };
+  }
+
+  // Find the actual select option matching the promised subject (same
+  // equality as the divergence check). Identical duplicates (two copies of
+  // a card) match the first — semantically the same choice.
+  function matchSubject(described, subject) {
+    var want = stringify(subject);
+    for (var i = 0; i < described.length; i++) {
+      if (stringify(stripEntry(described[i])) === want) return i;
+    }
+    return -1;
+  }
+
   // ---- the decision bridge ------------------------------------------------
 
   function decide(decisionType, optionList) {
     window.__harness.decisions++;
     var described = describeOptions(optionList, llmSeat);
     var divergence = checkPreviewDivergence(llmSeat, decisionType, described);
+
+    // D09 select fulfillment: a compound choice promised this subject.
+    var compoundChoice = -1;
+    if (COMPOUND && decisionType === "select" && pendingCompound) {
+      compoundChoice = matchSubject(described, pendingCompound.subject);
+      pendingCompound = null; // one-shot; mismatch falls through to a real ask
+    }
+
+    // D09 command fusing: the model sees complete actions.
+    var fused = null;
+    if (COMPOUND && decisionType === "command") {
+      fused = fuseCommandMenu(described);
+    }
+    var modelOptions = fused ? fused.options : described;
     var request = {
       seat: llmSeat,
       decisionType: decisionType,
@@ -237,18 +313,26 @@
       phase: currentPhase
         ? { identifier: currentPhase.identifier, title: currentPhase.title }
         : null,
-      options: described,
+      options: modelOptions,
       state: window.__harness.stateFor(llmSeat),
       reproductionCode: safeReproductionCode(),
     };
     // Analysis marker only — buildDecisionMessage never includes it, so
     // the model never sees it (it sees the authoritative actual menu).
     if (divergence) request.previewDivergence = divergence;
+    if (fused) request.compound = true;
     var seq = request.seq;
-    // D03: single-option decisions short-circuit at the host (logged as
-    // forced, no API call, no transcript entry). The page-side flow below
-    // is IDENTICAL — the host just answers {option: 0} itself.
-    if (AUTO_RESOLVE && optionList.length === 1) {
+    // D09: fulfilled select — host records it and answers the matched
+    // index; no API call, no transcript entry.
+    if (compoundChoice >= 0) {
+      request.compoundFulfilled = true;
+      request.compoundChoice = compoundChoice;
+    }
+    // D03: decisions with a single choice for the MODEL short-circuit at
+    // the host (logged as forced, no API call). Under compound the model's
+    // menu is the fused one — a lone verb with several subjects is a REAL
+    // choice, so the forced test uses the model-visible length.
+    else if (AUTO_RESOLVE && modelOptions.length === 1) {
       request.forced = true;
     }
     return window
@@ -263,11 +347,18 @@
           return 0;
         }
         var idx = response.option;
-        if (typeof idx !== "number" || idx < 0 || idx >= optionList.length) {
+        var limit = fused ? fused.options.length : optionList.length;
+        if (typeof idx !== "number" || idx < 0 || idx >= limit) {
           window.__harness.errors.push(
             "llmplayer: host returned out-of-range option " + idx + ", using 0"
           );
           idx = 0;
+        }
+        if (fused) {
+          var m = fused.map[idx];
+          if (m.subject) pendingCompound = { subject: m.subject };
+          notePreviewFromChoice(llmSeat, decisionType, described, m.verbIndex, seq);
+          return m.verbIndex;
         }
         notePreviewFromChoice(llmSeat, decisionType, described, idx, seq);
         return idx;
