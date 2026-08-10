@@ -14,6 +14,8 @@ import {
   buildDecisionMessage,
   buildLeanDecisionMessage,
   buildCompactionNotice,
+  buildDebriefPrompt,
+  DEBRIEF_INSTRUMENT_VERSION,
   PROFILES,
   type PageDecisionRequest,
   type PromptProfile,
@@ -51,6 +53,10 @@ export interface LLMGameOptions {
    *  as forced, no API call, no transcript entry). Default true; false is
    *  the game-1-interface comparison arm. */
   autoResolve?: boolean;
+  /** D07: postgame debrief — one extra call on the final transcript,
+   *  answers written to <gameId>-debrief.json. Default true; no-op in
+   *  stateless mode (no transcript) and on non-completed games. */
+  debrief?: boolean;
   /** Exchanges kept verbatim through a compaction reset. */
   compactionKeepTurns?: number;
 }
@@ -125,6 +131,7 @@ export interface LLMGameRecord extends GameRecord {
   contextMode: "conversational" | "stateless";
   historyVariant: "full" | "lean" | null; // null when stateless
   autoResolve: boolean;
+  debrief: boolean; // D07 flag as configured (artifact presence: debriefPath)
   llmDecisions: number; // API-answered decisions
   forcedDecisions: number; // D03 auto-resolved (no API call)
   rulesDecisions: number;
@@ -136,6 +143,9 @@ export interface LLMGameRecord extends GameRecord {
    *  many diverged. Divergent selects carry `preview_divergence`. */
   previewChecks: number;
   previewDivergences: number;
+  /** D07: path of the debrief artifact, or null (flag off, stateless,
+   *  non-completed game, or the debrief call failed). */
+  debriefPath: string | null;
   usage: Usage;
   decisionLogPath: string;
   invalidRecords: number;
@@ -169,6 +179,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
   const compactionThreshold = options.compactionThreshold ?? 150_000;
   const compactionKeepTurns = options.compactionKeepTurns ?? 20;
   const autoResolve = options.autoResolve ?? true;
+  const debrief = options.debrief ?? true;
   const startedAt = Date.now();
   const gameId = `llm-${model.replace(/[^a-z0-9.-]/gi, "_")}-s${seed}-${startedAt}`;
 
@@ -222,6 +233,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
     contextMode,
     historyVariant: contextMode === "conversational" ? historyVariant : null,
     autoResolve,
+    debrief,
     llmDecisions: 0,
     forcedDecisions: 0,
     rulesDecisions: 0,
@@ -231,6 +243,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
     transcriptTokensMax: 0,
     previewChecks: 0,
     previewDivergences: 0,
+    debriefPath: null,
     usage: { tokensIn: 0, tokensOut: 0, cacheRead: 0, cacheWrite: 0 },
     decisionLogPath,
     invalidRecords: 0,
@@ -553,6 +566,47 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
     record.log = finals.log;
     record.previewChecks = finals.previewChecks;
     record.previewDivergences = finals.previewDivergences;
+
+    // D07 postgame debrief: one extra call on the final (as-compacted)
+    // transcript. The prompt does NOT disclose the result — whether the
+    // model knows how the game ended is itself informative. The reply
+    // enters no transcript and no future call: zero-contamination by
+    // construction. No-op for stateless games and non-completed games.
+    if (debrief && transcript && record.status === "completed" && !apiAborted) {
+      try {
+        const debriefPrompt = buildDebriefPrompt();
+        const result = await client.summarize(system, [
+          ...transcript.messages(),
+          { role: "user", content: debriefPrompt },
+        ]);
+        record.usage.tokensIn += result.usage.tokensIn;
+        record.usage.tokensOut += result.usage.tokensOut;
+        record.usage.cacheRead += result.usage.cacheRead;
+        record.usage.cacheWrite += result.usage.cacheWrite;
+        const debriefPath = join(outDir, `${gameId}-debrief.json`);
+        await writeFile(
+          debriefPath,
+          JSON.stringify(
+            {
+              game_id: gameId,
+              instrument_version: DEBRIEF_INSTRUMENT_VERSION,
+              prompt: debriefPrompt,
+              text: result.text,
+              model,
+              tokens_in: result.usage.tokensIn,
+              tokens_out: result.usage.tokensOut,
+              cache_read: result.usage.cacheRead,
+              latency_ms: result.latencyMs,
+            },
+            null,
+            1
+          )
+        );
+        record.debriefPath = debriefPath;
+      } catch (e) {
+        record.errors.push(`debrief failed (game result unaffected): ${String(e)}`);
+      }
+    }
   } catch (e) {
     record.errors.push(`host: ${String(e)}`);
   } finally {

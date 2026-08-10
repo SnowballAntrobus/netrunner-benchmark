@@ -245,8 +245,10 @@ export class MockClient implements ChoiceClient {
   }
 
   async summarize(system: string, messages: ChatMessage[]): Promise<SummaryResult> {
+    // Serves both free-text paths (D01 compaction, D07 debrief) — the
+    // canned text is deliberately purpose-neutral.
     return {
-      text: "mock: summary for my future self (compaction exercised keylessly).",
+      text: "mock: free-text response (summarize path exercised keylessly).",
       usage: this.estimateUsage(system, messages),
       latencyMs: 0,
     };

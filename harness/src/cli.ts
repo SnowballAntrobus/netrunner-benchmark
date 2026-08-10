@@ -9,7 +9,7 @@
  *                   [--profile neutral|expert] [--reasoning brief|extended|scot|none]
  *                   [--context conversational|stateless] [--history full|lean]
  *                   [--compact-threshold N] [--compact-keep N]
- *                   [--auto-resolve on|off] [--seed N] ...
+ *                   [--auto-resolve on|off] [--debrief on|off] [--seed N] ...
  *    tsx src/cli.ts fetch-rules              # snapshot NSG learn-to-play guides
  *    tsx src/cli.ts audit [--file <game.json>] # conservation audit (default: golden fixtures)
  *    tsx src/cli.ts format --file <game.json>  # markdown game narratives (.report.md + .full.md)
@@ -164,6 +164,7 @@ if (command === "run-game") {
     compactionThreshold: parseInt(arg("compact-threshold", "150000"), 10),
     compactionKeepTurns: parseInt(arg("compact-keep", "20"), 10),
     autoResolve: arg("auto-resolve", "on") !== "off",
+    debrief: arg("debrief", "on") !== "off",
     outDir,
   });
   console.log(summarize(record));
@@ -186,19 +187,23 @@ if (command === "run-game") {
     (record.previewDivergences > 0 ? "  <-- inspect preview_divergence records" : "")
   );
   console.log(`decision log: ${record.decisionLogPath}`);
+  if (record.debriefPath) console.log(`debrief: ${record.debriefPath}`);
   if (model === "mock") {
     // CI acceptance: the mock injects one transient and one persistent
     // malformed response — both retry and fallback paths must have been
     // exercised — (conversational default) the synthetic mock usage must
-    // have driven at least one compaction, and (auto-resolve default) at
-    // least one forced record must exist, all keylessly.
+    // have driven at least one compaction, (auto-resolve default) at
+    // least one forced record must exist, and (debrief default) the
+    // debrief artifact must have been written, all keylessly.
     const ok =
       record.status === "completed" &&
       record.invalidRecords === 0 &&
       record.retriesTotal >= 1 &&
       record.fallbacks >= 1 &&
       (record.contextMode !== "conversational" || record.compactions >= 1) &&
-      (!record.autoResolve || record.forcedDecisions >= 1);
+      (!record.autoResolve || record.forcedDecisions >= 1) &&
+      (!record.debrief || record.contextMode !== "conversational" ||
+        record.debriefPath !== null);
     console.log(ok ? "LLM-GAME (mock): PASS" : "LLM-GAME (mock): FAIL");
     process.exit(ok ? 0 : 1);
   }

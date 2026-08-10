@@ -267,6 +267,29 @@ export function buildLeanDecisionMessage(request: PageDecisionRequest): string {
   ].join("\n");
 }
 
+/** Postgame debrief instrument (D07). Fixed, versioned wording — changing
+ *  it forks comparability across games/models, so any edit bumps the
+ *  version. Neutral and open-ended; deliberately does NOT disclose the
+ *  result (whether the model knows how the game ended is itself
+ *  informative). Q5 is the harness-feedback channel ("models dictate
+ *  their harness"): answers feed the design-review queue, never the
+ *  model. Zero-contamination by construction: sent as a separate call
+ *  after the game; the reply enters no transcript. */
+export const DEBRIEF_INSTRUMENT_VERSION = 1;
+
+export function buildDebriefPrompt(): string {
+  return [
+    "The game has ended. Please answer the following questions.",
+    "",
+    "1. Summarize how the game went from your perspective.",
+    "2. What was your plan, and how did it change as the game developed?",
+    "3. What were the key turning points?",
+    "4. What would you do differently?",
+    "5. Was there anything about the interface — the way state, options,",
+    "   or rules were presented — that hindered you?",
+  ].join("\n");
+}
+
 /** Compaction trigger (D01): the harness supplies the trigger and the empty
  *  page; every remembered word is the model's own. */
 export function buildCompactionNotice(keepTurns: number): string {

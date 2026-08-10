@@ -386,10 +386,34 @@ export async function formatGame(
   return { report: render(false), full: render(true) };
 }
 
+// D07: debrief artifact rendered at the end of both views. Read from the
+// sibling <stem>-debrief.json when present.
+async function debriefSection(gamePath: string): Promise<string> {
+  try {
+    const stem = gamePath.replace(/\.json$/, "");
+    const d = JSON.parse(await readFile(`${stem}-debrief.json`, "utf-8")) as {
+      instrument_version: number;
+      text: string;
+    };
+    return [
+      "",
+      "---",
+      "",
+      `## 🎤 Debrief _(instrument v${d.instrument_version}; the model's own words, from its final transcript — a self-report, not ground truth)_`,
+      "",
+      d.text,
+      "",
+    ].join("\n");
+  } catch {
+    return ""; // no debrief artifact — nothing to append
+  }
+}
+
 export async function writeFormatted(gamePath: string, jsonlPath: string | null): Promise<string[]> {
   const { report, full } = await formatGame(gamePath, jsonlPath);
   const stem = gamePath.replace(/\.json$/, "");
-  await writeFile(`${stem}.report.md`, report);
-  await writeFile(`${stem}.full.md`, full);
+  const debrief = await debriefSection(gamePath);
+  await writeFile(`${stem}.report.md`, report + debrief);
+  await writeFile(`${stem}.full.md`, full + debrief);
   return [`${stem}.report.md`, `${stem}.full.md`];
 }
