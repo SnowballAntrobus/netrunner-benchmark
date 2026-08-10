@@ -34,7 +34,11 @@ interface DecisionRow {
   transcript_tokens?: number | null;
   preview_divergence?: { command: string; previewed_at_seq: number; preview: unknown[] } | null;
   forced?: boolean; // D03: auto-resolved single-option decision (no API call)
-  state: { log?: string[]; runner?: { credits?: number; grip?: unknown[]; clicks?: number } } | null;
+  state: {
+    log?: string[];
+    runner?: { credits?: number; grip?: unknown[]; clicks?: number; agendaPoints?: number };
+    corp?: { agendaPoints?: number };
+  } | null;
 }
 
 interface CompactionRow {
@@ -172,6 +176,40 @@ export async function formatGame(
     if (!t || typeof t.number !== "number") return -1;
     return t.number * 2 + (t.side === "runner" ? 1 : 0);
   };
+
+  // D06 polish: scoreboard turn headers. For each turn boundary, the first
+  // state-bearing runner record before the NEXT boundary supplies the turn
+  // number and agenda points. Legacy games (no log_index) fall back to
+  // plain headers.
+  const headerInfo = new Map<number, { number: number | null; ap: string | null }>();
+  {
+    const withIdx = decisions
+      .filter((d) => d.seat === "runner" && typeof d.log_index === "number" && d.state)
+      .sort((a, b) => (a.log_index as number) - (b.log_index as number));
+    const bounds = [...boundaryAt.keys()].sort((a, b) => a - b);
+    for (let i = 0; i < bounds.length; i++) {
+      const from = bounds[i]!;
+      const to = bounds[i + 1] ?? Infinity;
+      const ord = boundaryAt.get(from)!;
+      // Turn number comes from the boundary ordinal itself (exact by
+      // construction). Records supply only the AP scoreboard — prefer one
+      // fully inside the new turn (a record captured AT the boundary index
+      // predates the SPOILER line and still carries the outgoing turn).
+      const inWindow = withIdx.filter(
+        (d) => (d.log_index as number) >= from && (d.log_index as number) < to
+      );
+      const r = inWindow.find((d) => ordinalOf(d.turn) === ord) ?? inWindow[0];
+      const corpAP = r?.state?.corp?.agendaPoints;
+      const runnerAP = r?.state?.runner?.agendaPoints;
+      headerInfo.set(from, {
+        number: Math.floor(ord / 2),
+        ap:
+          typeof corpAP === "number" && typeof runnerAP === "number"
+            ? `${corpAP}–${runnerAP}`
+            : null,
+      });
+    }
+  }
 
   // Compactions carry the exact log_index of the decision that triggered
   // them; render them just before that decision.
@@ -363,7 +401,14 @@ export async function formatGame(
       if ((m = line.match(/^SPOILER: At start of (Corp|Runner) turn:/))) {
         flushForced();
         const who = m[1]!;
-        out.push("", `## ${who === "Corp" ? "🏢" : "🏃"} ${who} turn`, "");
+        const info = headerInfo.get(i);
+        out.push(
+          "",
+          `## ${who === "Corp" ? "🏢" : "🏃"} ${who} turn` +
+            (info?.number != null ? ` ${info.number}` : "") +
+            (info?.ap ? ` · AP ${info.ap}` : ""),
+          ""
+        );
         continue;
       }
       if ((m = line.match(/^SPOILER: (Corp|Runner) has (.+)$/))) {
