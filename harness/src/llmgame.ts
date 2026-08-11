@@ -337,6 +337,9 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
   // adjacent records land in nondeterministic file order — surfaced by
   // D04's double-run comparison. Record ORDER in the file now matches
   // write order deterministically.
+  // D07 rev 2: capturedLog index of the last API-delivered decision — the
+  // debrief catch-up covers everything after it.
+  let lastApiLogIndex = 0;
   let writeQueue: Promise<void> = Promise.resolve();
   const appendRecord = (json: string): Promise<void> => {
     writeQueue = writeQueue.then(() => appendFile(decisionLogPath, json + "\n"));
@@ -444,6 +447,12 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
       }
 
       record.llmDecisions++;
+      // D07 rev 2: remember how far the model's view of the log reached.
+      // Everything past this index at game end was never delivered (no
+      // later API decision arrived to carry it) — the debrief's terminal
+      // catch-up starts here.
+      lastApiLogIndex =
+        (request as { logIndex?: number | null }).logIndex ?? lastApiLogIndex;
 
       // D01 compaction: checked BEFORE the decision, on the request size
       // observed at the PREVIOUS decision (threshold < window leaves
@@ -747,13 +756,36 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
     record.previewDivergences = finals.previewDivergences;
 
     // D07 postgame debrief: one extra call on the final (as-compacted)
-    // transcript. The prompt does NOT disclose the result — whether the
-    // model knows how the game ended is itself informative. The reply
-    // enters no transcript and no future call: zero-contamination by
-    // construction. No-op for stateless games and non-completed games.
+    // transcript. Rev 2: opens with the terminal catch-up (public log
+    // since the last API decision) and states the result plainly —
+    // verdict-blind debriefing is parked as a Phase-2 experiment. The
+    // reply enters no transcript and no future call: zero-contamination
+    // by construction. No-op for stateless games and non-completed games.
     if (debrief && transcript && record.status === "completed" && !apiAborted) {
       try {
-        const debriefPrompt = buildDebriefPrompt();
+        // D07 rev 2: terminal catch-up — the runner-visible log since the
+        // last API-delivered decision, from the page's own public filter
+        // (exactly what a next decision message would have carried).
+        let finalEvents: string[] = [];
+        try {
+          finalEvents = (await page.evaluate(
+            (i) =>
+              (
+                window as unknown as {
+                  __harness: { publicLogSince?: (i: number) => string[] };
+                }
+              ).__harness.publicLogSince?.(i) ?? [],
+            lastApiLogIndex
+          )) as string[];
+        } catch {
+          /* page unavailable — debrief proceeds without catch-up */
+        }
+        const debriefPrompt = buildDebriefPrompt(
+          finalEvents,
+          record.winner
+            ? { won: record.winner === "runner", reason: record.reason ?? "" }
+            : undefined
+        );
         const result = await client.summarize(system, [
           ...transcript.messages(),
           { role: "user", content: debriefPrompt },
@@ -769,6 +801,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
             {
               game_id: gameId,
               instrument_version: DEBRIEF_INSTRUMENT_VERSION,
+              final_events: finalEvents, // D07 rev 2: the terminal catch-up shown
               prompt: debriefPrompt,
               text: result.text,
               model,

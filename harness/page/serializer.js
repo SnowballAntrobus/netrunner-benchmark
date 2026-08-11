@@ -151,6 +151,32 @@
     // stay exact-prefix, never generic "word-colon" (log-corpus audit).
   }
 
+  // D07 rev 2: the runner-visible log from a given capturedLog index to the
+  // end — the terminal catch-up for the debrief. Uses the SAME
+  // isPublicLogLine filter as state.log (the model-visible flow must match
+  // exactly what a next decision would have delivered; the invariant
+  // checker's independent copy stays independent). Turn markers included,
+  // same synthesis as publicLogTail.
+  window.__harness.publicLogSince = function (fromIndex) {
+    var src = typeof capturedLog !== "undefined" ? capturedLog : [];
+    var markerAt = {};
+    var markers = (window.__harness && window.__harness.turnMarkers) || [];
+    for (var m = 0; m < markers.length; m++) {
+      (markerAt[markers[m].logIndex] = markerAt[markers[m].logIndex] || [])
+        .push(markers[m].text);
+    }
+    var out = [];
+    for (var i = Math.max(0, fromIndex | 0); i < src.length; i++) {
+      var ms = markerAt[i];
+      if (ms) for (var k = 0; k < ms.length; k++) out.push(ms[k]);
+      var line = String(src[i]).replace(/\n+$/, "");
+      if (isPublicLogLine(line)) out.push(line);
+    }
+    var tail = markerAt[src.length];
+    if (tail) for (var q = 0; q < tail.length; q++) out.push(tail[q]);
+    return out;
+  };
+
   function publicLogTail(maxLines) {
     var src = typeof capturedLog !== "undefined" ? capturedLog : [];
     // Turn markers (bootstrap.js) are synthesized into the tail at

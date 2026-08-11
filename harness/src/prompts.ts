@@ -289,17 +289,42 @@ export function buildLeanDecisionMessage(request: PageDecisionRequest): string {
 
 /** Postgame debrief instrument (D07). Fixed, versioned wording — changing
  *  it forks comparability across games/models, so any edit bumps the
- *  version. Neutral and open-ended; deliberately does NOT disclose the
- *  result (whether the model knows how the game ended is itself
- *  informative). Q5 is the harness-feedback channel ("models dictate
- *  their harness"): answers feed the design-review queue, never the
- *  model. Zero-contamination by construction: sent as a separate call
- *  after the game; the reply enters no transcript. */
-export const DEBRIEF_INSTRUMENT_VERSION = 1;
+ *  version. Neutral and open-ended. Q5 is the harness-feedback channel
+ *  ("models dictate their harness"): answers feed the design-review
+ *  queue, never the model. Zero-contamination by construction: sent as a
+ *  separate call after the game; the reply enters no transcript.
+ *
+ *  Rev 2 (game-3 finding): the prompt now opens with a terminal
+ *  catch-up — the public log lines since the model's last API-delivered
+ *  decision, exactly what the next decision message would have carried
+ *  had one arrived. Without it, every event after the last real
+ *  decision is invisible (auto-resolve widens this to whole terminal
+ *  chains: game 3's model never saw its fatal access and reported the
+ *  ending as an interface bug). The result is then stated plainly
+ *  ("you won/lost (reason)") — verdict-blind debriefing is parked as a
+ *  Phase-2 experiment. The model's IN-GAME epistemic state remains
+ *  measurable where it always lived: the decision records. */
+export const DEBRIEF_INSTRUMENT_VERSION = 2;
 
-export function buildDebriefPrompt(): string {
+export function buildDebriefPrompt(
+  finalEvents: string[] = [],
+  result?: { won: boolean; reason: string }
+): string {
+  const catchUp =
+    finalEvents.length > 0
+      ? [
+          "Since your last decision, the following events occurred:",
+          "",
+          ...finalEvents.map((l) => `  ${l}`),
+          "",
+        ]
+      : [];
+  const verdict = result
+    ? `The game has ended: you ${result.won ? "won" : "lost"} (${result.reason}).`
+    : "The game has ended.";
   return [
-    "The game has ended. Please answer the following questions.",
+    ...catchUp,
+    `${verdict} Please answer the following questions.`,
     "",
     "1. Summarize how the game went from your perspective.",
     "2. What was your plan, and how did it change as the game developed?",

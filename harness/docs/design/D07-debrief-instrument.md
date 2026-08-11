@@ -121,3 +121,38 @@ canned text in CI.
    its transcript; whether it KNOWS how the game ended is itself
    informative (and game 1's model diagnosed its own killer-gap
    unprompted).
+
+## Rev 2 — terminal catch-up (game-3 finding, approved)
+
+`DEBRIEF_INSTRUMENT_VERSION: 2`. Open question 3's premise ("the final
+decisions and log tail are in its transcript") proved FALSE at exactly
+the moments that matter most: the model's view of the log only
+advances when an API decision delivers it, so every event after the
+last real decision is invisible — and auto-resolve (D03) widens that
+window to entire terminal chains. Game 3 made it vivid: the fatal
+access sequence (three forced decisions, "Urtica Cipher accessed",
+"Runner takes 5 net damage") happened wholly after the model's last
+API decision. It died without ever learning it was hit, and its
+debrief — accurately, from its information set — described the ending
+as an interface bug, contaminating Q1/Q3/Q4 with a false premise.
+
+Resolution (reviewed): the debrief prompt now OPENS with a terminal
+catch-up — the runner-visible log lines since the last API-delivered
+decision, produced by the page's own public-log filter
+(`__harness.publicLogSince`), formatted as events, with turn markers.
+Exactly what the next decision message would have carried had one
+arrived: this closes the information gap without adding any new
+channel. The result is then stated plainly: "The game has ended: you
+won/lost (reason)." — necessary because the engine's public log is
+inconsistent about verdicts (it announces AP wins with final tallies,
+but a flatline ends at "Runner takes N net damage" with no verdict —
+measured on game 3 and mock seed 5), and a debrief that leaves the
+model guessing its own result degrades every answer downstream. A
+catch-up-only variant (model infers the outcome from events; less
+outcome-conditioned hindsight in Q4) was considered and **parked as a
+Phase-2 disclosure experiment** alongside two-stage
+blind-then-disclosed debriefing. The catch-up is recorded in the
+debrief artifact (`final_events`) so analysis can always separate
+what was shown from what was said. The model's in-game epistemic
+state was never this instrument's to measure — it lives in the
+decision records.
