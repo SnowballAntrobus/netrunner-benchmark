@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<!-- Replay viewer entry point (D08): the graphical engine loadout, booted
+     to an idle state (human corp at mulligan — no AI acts), then driven as
+     a sequence of still lifes by harness/page/inspect.js, which evals each
+     decision record's reproduction_code (the engine's own rewind
+     mechanism). Engine files untouched (quarantine).
+     URL params: src=<jsonl path>&game=<json path>[&seq=N][&shot=1] -->
+<html>
+	<head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1">
+		<meta name="robots" content="noindex">
+		<title>Chiriboga Replay</title>
+		<link rel="stylesheet" type="text/css" href="../style.css">
+		<!-- Pristine JSON capture — as in harness.html (utility.js overrides
+		     the global JSON.stringify with a title-collapsing replacer). -->
+		<script>window.__pristineJSON = { stringify: JSON.stringify, parse: JSON.parse };</script>
+		<script src="../jquery/jquery-3.2.1.min.js"></script>
+		<script src="../cardrenderer/pixi.min.js"></script>
+		<script src="../cardrenderer/pixi-particles.min.js"></script>
+		<script src="../cardrenderer/particlesystems.js"></script>
+		<script src="../cardrenderer/cardrenderer.js"></script>
+		<script src="../deck/lz-string.min.js"></script>
+		<script src="../deck/seedrandom.min.js"></script>
+		<script>
+			var cardSet = []; //prepare to receive card definitions
+			var setIdentifiers = []; //set identifiers
+		</script>
+		<script>var accessibilityMode="";</script>
+		<script src="../init.js"></script>
+		<script src="../phase.js"></script>
+		<script src="../command.js"></script>
+		<script src="../checks.js"></script>
+		<script src="../mechanics.js"></script>
+		<script src="../utility.js"></script>
+		<script src="../sets/systemgateway.js"></script>
+		<script src="../sets/systemupdate2021.js"></script>
+		<script src="../sets/tutorial.js"></script>
+		<script src="../decks.js"></script>
+		<script src="../runcalculator.js"></script>
+		<script src="../ai_corp.js"></script>
+		<script src="../ai_runner.js"></script>
+		<script>var versionReference='replay';</script>
+		<style>
+			#replay-panel {
+				position: fixed; top: 0; right: 0; width: 400px; height: 100vh;
+				background: rgba(16,18,24,0.96); color: #ddd; z-index: 4000;
+				font: 13px/1.45 -apple-system, "Segoe UI", Roboto, sans-serif;
+				display: flex; flex-direction: column; border-left: 1px solid #333;
+			}
+			#replay-controls { padding: 10px 12px; border-bottom: 1px solid #333; }
+			#replay-controls button { margin-right: 6px; }
+			#replay-slider { width: 100%; margin-top: 8px; }
+			#replay-body { padding: 12px; overflow-y: auto; flex: 1; }
+			.rp-head { font-weight: 600; color: #fff; margin-bottom: 6px; }
+			.rp-badge { display: inline-block; padding: 1px 7px; border-radius: 9px;
+				background: #2d3748; margin: 0 4px 4px 0; font-size: 11px; }
+			.rp-badge.warn { background: #7c2d12; color: #fed7aa; }
+			.rp-badge.forced { background: #1e3a5f; }
+			.rp-opt { padding: 5px 8px; margin: 3px 0; border-radius: 4px;
+				background: #1a202c; border-left: 3px solid #333; }
+			.rp-opt.chosen { border-left-color: #48bb78; background: #1c2b22; }
+			.rp-opt .rp-choices { color: #8aa; font-size: 12px; margin-top: 2px; }
+			.rp-reason { background: #201a2c; border-left: 3px solid #9f7aea;
+				padding: 8px 10px; margin: 8px 0; border-radius: 4px; white-space: pre-wrap; }
+			.rp-compact { background: #2a2410; border-left: 3px solid #d69e2e;
+				padding: 8px 10px; margin: 8px 0; border-radius: 4px; white-space: pre-wrap; }
+			.rp-dim { color: #889; font-size: 12px; }
+			.rp-section { margin-top: 12px; }
+			#replay-title { font-size: 12px; color: #aab; padding: 8px 12px 0; }
+			#board-labels { position: fixed; left: 0; top: 0; pointer-events: none; z-index: 3999; }
+			.board-label { position: absolute; transform: translateX(-50%);
+				color: #7fbf7f; font: 9px -apple-system, "Segoe UI", Roboto, sans-serif;
+				text-shadow: 0 0 3px #000; white-space: nowrap; }
+			#board-tip { position: fixed; pointer-events: none; z-index: 4500;
+				background: rgba(10,12,16,0.95); color: #eee; border: 1px solid #444;
+				border-radius: 4px; padding: 5px 9px; font: 12px -apple-system, "Segoe UI", Roboto, sans-serif;
+				max-width: 260px; }
+			/* hide engine interaction chrome — the replay is view-only.
+			   NOTE: #loading must stay visible during boot — the engine's
+			   texture ticker only calls StartGame() while it shows. */
+			#footer, #cmdform, #card-search, #search-result, #menu, #modal,
+			#menubar { display: none !important; }
+		</style>
+	</head>
+
+	<body id="body" onload="Init();">
+		<div id="contentcontainer" class="content">
+			<div id="output"></div>
+			<input id="card-search" type="text" value="" placeholder="Card search">
+			<p id="search-result"></p>
+			<form id="cmdform">
+				<input type="submit" value="Submit">
+				<span id="turnphase"></span>
+				<input id="command" type="text" value="">
+			</form>
+		</div>
+		<div id="menubar"></div>
+		<div id="header"></div>
+		<div id="fps"></div>
+		<div id="footer"></div>
+		<div id="modal" class="modal">
+			<div id="modalcontent" class="modal-content"></div>
+		</div>
+		<div id="history-wrapper">
+			<div id="history"></div>
+		</div>
+		<div id="loading" class="modal" style="display:flex;">
+			<div class="modal-content-inactive"><h1 id="loading-text">Loading...</h1></div>
+		</div>
+		<div id="menu" class="modal">
+			<div id="menucontent" class="modal-content-inactive">
+				<label for="narration"><input type="checkbox" id="narration">Narrate AI</label>
+				<select id="rewind-select" disabled>
+					<option value="">Rewind</option>
+				</select>
+			</div>
+		</div>
+		<!-- Board annotations: pointer-transparent overlays anchored to the
+		     (possibly downscaled) canvas — counter labels + hover tooltip. -->
+		<div id="board-labels"></div>
+		<div id="board-tip" style="display:none"></div>
+		<div id="replay-panel">
+			<div id="replay-title">Loading replay…</div>
+			<div id="replay-controls">
+				<button id="rp-prev">◀ Prev</button>
+				<button id="rp-next">Next ▶</button>
+				<select id="rp-turn"></select>
+				<label style="margin-left:8px"><input type="checkbox" id="rp-omni" checked> Omniscient</label>
+				<label style="margin-left:8px"><input type="checkbox" id="rp-skip" checked> Skip auto-resolved</label>
+				<input type="range" id="replay-slider" min="0" max="0" value="0">
+				<div id="rp-pos" class="rp-dim"></div>
+			</div>
+			<div id="replay-body"></div>
+		</div>
+		<script src="page/inspect.js"></script>
+	</body>
+</html>

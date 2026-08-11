@@ -23,6 +23,22 @@ export interface StaticServer {
   close: () => Promise<void>;
 }
 
+// The repo ships NO image assets (deployments serve them separately).
+// For the replay viewer (D08), missing engine textures resolve to embedded
+// solid-color placeholders so PIXI's loaders complete and the boot never
+// stalls; card FACES are canvas-generated page-side with real titles.
+const PLACEHOLDER_PNG: Record<string, string> = {
+  corp: "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAmklEQVR4nO3QQRHAIADAMEAIQjCDfxVDRh5rFPQ697nf+LGlA7QG6ACtATpAa4AO0BqgA7QG6ACtATpAa4AO0BqgA7QG6ACtATpAa4AO0BqgA7QG6ACtATpAa4AO0BqgA7QG6ACtATpAa4AO0BqgA7QG6ACtATpAa4AO0BqgA7QG6ACtATpAa4AO0BqgA7QG6ACtATpAa4AO0B4/dwI2vPS60gAAAABJRU5ErkJggg==",
+  runner: "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAl0lEQVR4nO3QURUAEADAQPSQVXRi3Iddgr3Ns/cdH1s6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugA7QHAlgI4wirRAgAAAABJRU5ErkJggg==",
+  neutral: "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAmklEQVR4nO3QMRHAIADAQEAmIwLwvxUZPzSvIJe5z/3Gjy0doDVAB2gN0AFaA3SA1gAdoDVAB2gN0AFaA3SA1gAdoDVAB2gN0AFaA3SA1gAdoDVAB2gN0AFaA3SA1gAdoDVAB2gN0AFaA3SA1gAdoDVAB2gN0AFaA3SA1gAdoDVAB2gN0AFaA3SA1gAdoDVAB2gN0AFaA3SA9gAdMQKp61SiRgAAAABJRU5ErkJggg==",
+};
+
+function placeholderImage(path: string): Buffer {
+  const name = path.toLowerCase();
+  const key = name.includes("corp") ? "corp" : name.includes("runner") ? "runner" : "neutral";
+  return Buffer.from(PLACEHOLDER_PNG[key]!, "base64");
+}
+
 export async function startServer(repoRoot: string): Promise<StaticServer> {
   const server = createServer(async (req, res) => {
     try {
@@ -36,14 +52,49 @@ export async function startServer(repoRoot: string): Promise<StaticServer> {
         res.writeHead(403).end();
         return;
       }
-      const body = await readFile(file);
+      let body: Buffer;
+      try {
+        body = await readFile(file);
+      } catch (e) {
+        if (path.includes("/images/")) {
+          // The image pack extracts to <repoRoot>/images, but pages under
+          // /harness/ request images RELATIVE to themselves
+          // (/harness/images/...). Re-anchor any /images/ request at the
+          // repo-root pack before falling back to a placeholder.
+          const packPath = join(
+            repoRoot,
+            path.slice(path.indexOf("/images/") + 1)
+          );
+          try {
+            const packBody = await readFile(packPath);
+            res.writeHead(200, {
+              "content-type":
+                MIME[extname(packPath).toLowerCase()] ?? "application/octet-stream",
+              "cache-control": "no-store",
+            });
+            res.end(packBody);
+            return;
+          } catch {
+            /* pack absent or file missing — placeholder below */
+          }
+          res.writeHead(200, {
+            "content-type": "image/png",
+            "cache-control": "no-store",
+            // The viewer probes this to decide canvas faces vs real art.
+            "x-harness-placeholder": "1",
+          });
+          res.end(placeholderImage(path));
+          return;
+        }
+        throw e;
+      }
       res.writeHead(200, {
         "content-type": MIME[extname(file).toLowerCase()] ?? "application/octet-stream",
         "cache-control": "no-store",
       });
       res.end(body);
     } catch {
-      res.writeHead(404).end(); // missing images etc. are expected; stay quiet
+      res.writeHead(404).end(); // missing files etc. are expected; stay quiet
     }
   });
 
