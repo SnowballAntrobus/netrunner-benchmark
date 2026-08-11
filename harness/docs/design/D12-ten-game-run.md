@@ -33,10 +33,20 @@ reviewed (no new finding-response designs pending).
 Game 2's ledger (record on disk): 136,666 uncached input + 13,856 out
 + 8,452,517 cache-read + 271,316 cache-write = **$1.39**. The
 structure matters: **98.4% of input tokens were cache reads** at
-$0.10/MTok — prompt caching is already carrying the cost. Compound
-(D09) cuts API decisions further (game 3 will give the new baseline).
-Projection: **≤ ~$14 for the 10-game run**, likely less under
-compound.
+$0.10/MTok — prompt caching is already carrying the cost. Under the
+full D09-2 stack the haiku data point is ~$0.27 for a turn-3 game
+(games so far die early at seed 7); a full-length haiku game should
+land near game 2's ~$1.40. Projection: **≤ ~$14 for the 10-game run**,
+likely well under.
+
+**Threshold note (post-opus-D09-2, measured)**: fused menus fatten
+decision messages, which accelerates compaction at tight thresholds —
+the opus D09-2 game compacted 7× at 150K and cost ~$19.80 vs ~$12.20
+pre-fusion. Opus models now default to a 300K threshold (cli.ts).
+Irrelevant to the haiku M5 run (haiku games never approach 150K), but
+any opus arm budgets ~$12–15/game at the new default, and the
+"fixed threshold across models" idea is retired (see PROMPTING.md) —
+cadence is model-dependent at any shared constant.
 
 ## Batch API: analyzed, and rejected for this run
 
@@ -86,6 +96,12 @@ Two different questions hide in "how good is haiku at netrunner":
   temperature, because the benchmark should measure the model as it
   is actually used. So within-seed variance is irreducible: it must
   be measured, not assumed away.
+
+The seed-7 shakedowns already preview both components: opus is 2/2
+(wins by entirely different paths — outcome-stable, trajectory-
+variable), sonnet survived the turn-2 trap in 1 of 3 attempts
+(outcome-unstable), haiku 0/4. Within-seed variance is plainly
+model-dependent, which is itself a reportable property.
 
 This maps exactly onto the eval-statistics literature: Miller,
 *Adding Error Bars to Evals* (arXiv 2411.00640) — seeds are clusters,

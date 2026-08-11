@@ -118,3 +118,34 @@ quote each game's compaction summaries alongside outcomes.
 - DECISION_LOG note on the 30-line tail edge (documentation only).
 - Phase 2 (parked): rulebook-reliance ablation; access-memory probing
   (does the model ever condition on its own access history?).
+
+---
+
+# Addendum — Opus game 2 (D09-2 stack), llm-claude-opus-5-s7-1786422381592
+
+Second opus game at seed 7, first under deeper fusion: **runner win
+7–3 in 15 turns again**, by an entirely different path — breaker suite
++ drip economy, early remote steals, then a corp counterattack
+(Public Trail tag → Retribution kills Carmen → click-trash removes Red
+Team), a multi-turn rebuild, and the winning Send a Message off R&D on
+turn 15. The debrief narrates all of it accurately.
+
+**Machinery: perfect game.** 114 API / 474 forced / 65 fulfilled / 4
+folded; 0 retries, fallbacks, invalid records, preview divergences,
+large-menu alerts, truncated summaries, suppressed compactions. All
+three D09-2 classes fired live, including a 10-card Archives fold
+containing two Urtica Ciphers (inert, as pool-audited) and `then`
+chains on ability server-choices (Red Team → HQ) the design's
+pure-Enumerate rule covered without anticipating.
+
+**Cost regression (the game's one finding)**: 7 compactions at the
+150K threshold (`dropped_turns` 27→7 — floor creep accelerated by
+fatter fused messages), ~$19.80 vs ~$12.20 for opus game 1. Mitigated
+same-day: opus models default to a 300K threshold; mechanism
+documented in PROMPTING.md; D12 cost model updated.
+
+**Corpus tally at seed 7**: opus 2/2 wins (different paths), sonnet 1
+survival in 3 tries (both deaths near-identical turn-2 trap walks),
+haiku 0/4 (three near-identical turn-3 trap walks; best attempt stole
+2 AP first). The advanced-Urtica read remains the sharpest single
+discriminator the benchmark has produced.

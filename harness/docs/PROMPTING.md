@@ -44,7 +44,7 @@ basis, failure modes, and the variant analysis live in
 |---|---|---|---|
 | `--context` | conversational / stateless | conversational | one running conversation vs fresh context per decision |
 | `--history` | full / lean | full | what a PAST decision's user turn keeps: the complete message (variant A) or header+options only (variant B — past board positions then live only in the model's own words) |
-| `--compact-threshold` | tokens | 150000 | compact when the observed request size crosses this — a PER-MODEL knob (see "Choosing the threshold" below) |
+| `--compact-threshold` | tokens | 150000 (300000 for opus models) | compact when the observed request size crosses this — a PER-MODEL knob (see "Choosing the threshold" below) |
 | `--compact-keep` | exchanges | 20 | exchanges kept verbatim through a compaction reset |
 | `--actions` | compound / split | compound | D09: fuse verb+subject into single menu entries ("run Archives"), page auto-fulfills the follow-up select — vs the raw two-question protocol as the ablation arm. The interface guide swaps a mode-matched paragraph so each arm gets an honest description of its own protocol |
 
@@ -101,6 +101,20 @@ literature triangulates it from three directions:
 Rule of thumb for a new model: start at ~75% of its context window,
 verify the post-compaction baseline leaves a sane epoch length, and log
 everything — the threshold is itself an experimental variable.
+
+**Fusion inflates the floor (measured, opus D09-2 game).** Compound
+menus (D09/D09-2) fatten each decision message — cross-product entries,
+`then` fields, previews — so the kept-20-exchange floor rises and
+epochs shrink over a long game: at 150K the opus D09-2 win compacted 7
+times with `dropped_turns` decaying 27→7 (epochs down to ~7–10 API
+decisions) and cost ~$19.80 vs ~$12.20 for the pre-fusion opus win at
+the same threshold. Consequence: opus models now DEFAULT to a 300K
+threshold (explicit flag overrides), and the "hold the threshold fixed
+across models for comparability" argument is retired — compaction
+cadence is model-dependent at any fixed value, because message weight
+and verbosity are. The threshold's job is clearing the floor with real
+headroom on the model's window; cross-model comparability lives in the
+records, not in a shared constant.
 
 Mechanics worth knowing when reading results:
 

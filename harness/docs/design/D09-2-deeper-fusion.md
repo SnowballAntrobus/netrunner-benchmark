@@ -125,3 +125,27 @@ D05). DECISION_LOG documents the new field.
 - Acceptance gate extended: compound mode now also requires
   `orderFolded >= 1` — the CI mock seed moves to 3 (exercises every
   clause including folds; seed 5's new trajectory has none).
+
+## Live fire (opus game 2, post-implementation)
+
+First real-model game under D09-2 (opus, seed 7): runner win 7–3 in 15
+turns — opus is 2/2 at this seed by entirely different paths. Every
+class fired in the wild: 65 fulfillments; chosen `then` entries
+including "trigger Carmen → Do 2 net damage" (class b) and "trigger
+Red Team → HQ" (class a semantics on an ABILITY's server choice — a
+shape the design didn't explicitly anticipate but the pure-Enumerate
+rule covers); 4 order folds, the largest a 10-card Archives breach
+containing two Urtica Ciphers — accessed silently and harmlessly,
+exactly as the pool audit certified. Zero retries, fallbacks, invalid
+records, preview divergences, large-menu alerts, or truncated
+summaries.
+
+**Cost regression found and mitigated**: fused menus fatten each
+decision message, so the transcript grows faster per API decision and
+the kept-window floor creeps up — at a 150K threshold this drove 7
+compactions (epochs decaying to ~7–10 API decisions) and ~$19.80 total
+vs ~$12.20 for the pre-fusion opus game. Mitigation shipped with this
+addendum: opus models default to `--compact-threshold 300000`
+(cli.ts), and PROMPTING.md documents the floor-inflation mechanism.
+The fusion's API-call savings are real; they must not be spent on
+compaction churn.

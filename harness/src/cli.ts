@@ -164,9 +164,17 @@ if (command === "run-game") {
     reasoningStyle,
     contextMode,
     historyVariant,
-    // Per-model knob: ~70-80% of the model's context window (default is
-    // tuned for 200K-window models like haiku; see PROMPTING.md).
-    compactionThreshold: parseInt(arg("compact-threshold", "150000"), 10),
+    // Per-model knob. 150K suits 200K-window models (haiku, sonnet).
+    // Opus (1M window) defaults to 300K: measured on the opus D09-2 game,
+    // 150K produced 7 compactions with epochs decaying to ~7-10 API
+    // decisions (fused menus fatten each message, raising the kept-window
+    // floor) and cost ~$19.80 vs ~$12.20 pre-fusion — the threshold must
+    // clear the floor with real headroom. Explicit flag always wins.
+    // See PROMPTING.md "Choosing the threshold".
+    compactionThreshold: parseInt(
+      arg("compact-threshold", model.startsWith("claude-opus") ? "300000" : "150000"),
+      10
+    ),
     compactionKeepTurns: parseInt(arg("compact-keep", "20"), 10),
     autoResolve: arg("auto-resolve", "on") !== "off",
     debrief: arg("debrief", "on") !== "off",

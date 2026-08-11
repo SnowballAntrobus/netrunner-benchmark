@@ -32,7 +32,8 @@ npm run llm-game -- --seed 7                  # Claude as Runner (needs ANTHROPI
                                               # context knobs (D01): --context
                                               #   conversational|stateless (default
                                               #   conversational), --history full|lean,
-                                              #   --compact-threshold N, --compact-keep N
+                                              #   --compact-threshold N (default 150K;
+                                              #   300K for opus models), --compact-keep N
                                               # interface knobs: --auto-resolve on|off
                                               #   (D03, default on: 1-option decisions
                                               #   skip the API, logged forced),
