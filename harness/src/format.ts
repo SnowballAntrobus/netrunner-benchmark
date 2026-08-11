@@ -36,6 +36,7 @@ interface DecisionRow {
   forced?: boolean; // D03: auto-resolved single-option decision (no API call)
   compound?: boolean; // D09: options were the fused menu
   compound_fulfilled?: boolean; // D09: select auto-answered from the fused choice
+  order_folded?: boolean; // D09-2: access-order fold (guarded auto-resolve)
   state: {
     log?: string[];
     runner?: { credits?: number; grip?: unknown[]; clicks?: number; agendaPoints?: number };
@@ -335,6 +336,7 @@ export async function formatGame(
     if (d.fallback) meta.push("FALLBACK");
     if (full && d.forced) meta.push("auto-resolved");
     if (full && d.compound_fulfilled) meta.push("compound-fulfilled");
+    if (full && d.order_folded) meta.push("order-folded");
     if (full && d.latency_ms) meta.push(`${(d.latency_ms / 1000).toFixed(1)}s`);
     const metaStr = meta.length ? ` _( ${meta.join(", ")} )_` : "";
     const lines: string[] = [];
@@ -400,7 +402,7 @@ export async function formatGame(
           // Never collapse a divergent select — those are exactly the
           // records the review wants to see.
           if (
-            ((d.options.length === 1 && isBoilerplate(d.reasoning)) || d.compound_fulfilled) &&
+            ((d.options.length === 1 && isBoilerplate(d.reasoning)) || d.compound_fulfilled || d.order_folded) &&
             !full && !d.preview_divergence
           ) {
             forcedRun++;

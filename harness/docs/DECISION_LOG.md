@@ -113,9 +113,23 @@ split` restores the two-question presentation as an ablation arm.
                                    //   API call, model fields null (like
                                    //   forced). The game record splits
                                    //   these out as compoundFulfilled.
-                                   //   Deeper follow-ups (e.g. the server
-                                   //   choice after "play Jailbreak") still
-                                   //   reach the model as real selects
+                                   //   Since D09-2, fused entries may carry
+                                   //   a "then" field (two-level fusion:
+                                   //   "play Jailbreak → run R&D") — both
+                                   //   follow-up selects then fulfill
+  "order_folded": false,           // D09-2: true = an access-order select
+                                   //   folded by the structural guard
+                                   //   (no unrezzed card in the accessed
+                                   //   server's root — order provably
+                                   //   irrelevant, pool-audited; see
+                                   //   design/D09-2-deeper-fusion.md).
+                                   //   Option 0 taken, no API call, model
+                                   //   fields null. Absent pre-D09-2
+  "large_menu": 44,                // D09-2: present only when this API
+                                   //   decision's fused menu reached the
+                                   //   alert threshold (>= 40 entries) —
+                                   //   unbounded by design, flagged for
+                                   //   inspection
   "preview_divergence": null       // D05: on a SELECT decision, set to
                                    //   {command, previewed_at_seq, preview}
                                    //   when this menu differs from the

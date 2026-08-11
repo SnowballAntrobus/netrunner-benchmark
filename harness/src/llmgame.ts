@@ -125,6 +125,14 @@ export interface DecisionRecord {
   /** D09: true on a select auto-answered from a prior compound choice
    *  (no API call, no transcript entry; model fields null). */
   compound_fulfilled: boolean;
+  /** D09-2: true on an access-order select folded by the structural
+   *  guard (order provably irrelevant; option 0 taken, no API call).
+   *  Absent on pre-D09-2 records. */
+  order_folded?: boolean;
+  /** D09-2: set (to the fused menu length) on API decisions whose fused
+   *  menu reached the alert threshold (>= 40 entries) — unbounded by
+   *  review decision, but flagged for inspection. */
+  large_menu?: number;
 }
 
 /** D01: compaction events are first-class records in the same JSONL stream —
@@ -162,6 +170,8 @@ export interface LLMGameRecord extends GameRecord {
   actions: "compound" | "split"; // D09
   llmDecisions: number; // API-answered decisions
   compoundFulfilled: number; // D09 page-fulfilled selects (no API call)
+  orderFolded: number; // D09-2 access-order folds (no API call)
+  largeFusedMenus: number; // D09-2 fused menus at/over the alert threshold
   forcedDecisions: number; // D03 auto-resolved (no API call)
   rulesDecisions: number;
   retriesTotal: number;
@@ -197,7 +207,7 @@ export function validateDecisionRecord(r: DecisionRecord): string[] {
   if (r.seat === "runner" && r.state === null) problems.push("runner record missing state");
   // Forced (D03) and compound-fulfilled (D09) records never touched the
   // model — model fields are null.
-  if (r.seat === "runner" && r.model === null && !r.forced && !r.compound_fulfilled)
+  if (r.seat === "runner" && r.model === null && !r.forced && !r.compound_fulfilled && !r.order_folded)
     problems.push("runner record missing model");
   if (r.forced && r.options.length !== 1)
     problems.push("forced record with more than one option");
@@ -324,6 +334,8 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
     actions,
     llmDecisions: 0,
     compoundFulfilled: 0,
+    orderFolded: 0,
+    largeFusedMenus: 0,
     forcedDecisions: 0,
     rulesDecisions: 0,
     retriesTotal: 0,
@@ -415,6 +427,45 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
         return JSON.stringify({ option: request.compoundChoice ?? 0 });
       }
 
+      // D09-2 class (c): access-order fold — the page proved (structural
+      // guard, pool-audited) that order cannot matter; option 0 taken,
+      // full record, no API call.
+      if (request.orderFolded) {
+        record.orderFolded++;
+        await writeDecision({
+          record_type: "decision",
+          game_id: gameId,
+          seq: request.seq,
+          log_index: (request as { logIndex?: number | null }).logIndex ?? null,
+          turn: request.turn,
+          phase: request.phase,
+          seat: "runner",
+          decision_type: request.decisionType,
+          state: request.state,
+          options: request.options,
+          choice: 0,
+          reasoning: null,
+          raw_response: null,
+          retries: null,
+          fallback: null,
+          model: null,
+          tokens_in: null,
+          tokens_out: null,
+          cache_read: null,
+          latency_ms: null,
+          reproduction_code: request.reproductionCode,
+          transcript_tokens: null,
+          compaction_id: transcript ? transcript.compactions : null,
+          preview_divergence: request.previewDivergence ?? null,
+          forced: false,
+          failed_attempts: null,
+          compound: false,
+          compound_fulfilled: false,
+          order_folded: true,
+        });
+        return JSON.stringify({ option: 0 });
+      }
+
       // D03 forced path: single-option decision auto-resolved — full
       // record (state, options, divergence marker), no API call, no
       // transcript entry. Index 0 is the only possible outcome.
@@ -454,6 +505,12 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
       }
 
       record.llmDecisions++;
+      if (typeof request.largeMenu === "number") {
+        record.largeFusedMenus++;
+        console.log(
+          `⚠ fused menu of ${request.largeMenu} entries at seq ${request.seq} — unbounded by design, inspect if frequent`
+        );
+      }
       // D07 rev 2: remember how far the model's view of the log reached.
       // Everything past this index at game end was never delivered (no
       // later API decision arrived to carry it) — the debrief's terminal
@@ -568,6 +625,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
         failed_attempts: result.attempts.length > 0 ? result.attempts : null,
         compound: request.compound === true,
         compound_fulfilled: false,
+        ...(typeof request.largeMenu === "number" ? { large_menu: request.largeMenu } : {}),
       });
       return JSON.stringify({ option: result.option });
     });

@@ -39,4 +39,4 @@ jobs:
       # compound menus the mock's seeded choices shift and seed 7's game
       # ends in a turn-2 flatline too short to cross the compaction
       # threshold; seed 5 runs 752 decisions and exercises every clause.
-      - run: npx tsx src/cli.ts llm-game --model mock --seed 5 --compact-threshold 40000
+      - run: npx tsx src/cli.ts llm-game --model mock --seed 3 --compact-threshold 40000

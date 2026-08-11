@@ -182,7 +182,8 @@ if (command === "run-game") {
     (record.historyVariant ? `/${record.historyVariant}` : "") +
     ` autoResolve=${record.autoResolve ? "on" : "off"} actions=${record.actions}` +
     ` llmDecisions=${record.llmDecisions} forced=${record.forcedDecisions} ` +
-    `fulfilled=${record.compoundFulfilled} ` +
+    `fulfilled=${record.compoundFulfilled} folded=${record.orderFolded} ` +
+    (record.largeFusedMenus > 0 ? `⚠ largeMenus=${record.largeFusedMenus} ` : "") +
     `rulesDecisions=${record.rulesDecisions} retries=${record.retriesTotal} ` +
     `fallbacks=${record.fallbacks} invalidRecords=${record.invalidRecords}`
   );
@@ -240,6 +241,7 @@ if (command === "run-game") {
       (!record.debrief || record.contextMode !== "conversational" ||
         record.debriefPath !== null) &&
       (record.actions !== "compound" || record.compoundFulfilled >= 1) &&
+      (record.actions !== "compound" || record.orderFolded >= 1) &&
       transientOk &&
       persistentOk;
     console.log(

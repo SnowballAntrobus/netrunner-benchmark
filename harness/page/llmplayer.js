@@ -43,7 +43,7 @@
   // subject. Mismatch falls back to a REAL select decision (and D05's
   // divergence flag fires via the usual check) — fusion can never wedge.
   var COMPOUND = params.get("actions") !== "split";
-  var pendingCompound = null; // {subject: <stripped preview entry>}
+  var pendingCompound = null; // {queue: [<stripped promised subjects, in order>]}
 
   // The engine's utility.js overrides the global JSON.stringify with a
   // title-collapsing replacer (readable logs). Harness requests must keep
@@ -115,21 +115,68 @@
         return localRng / 2147483648;
       };
       var choices;
-      try {
-        choices = currentPhase.Enumerate[cmd]();
-      } finally {
-        Math.random = seededRandom;
-      }
-      if (!choices || !choices.length) return null;
       var out = [];
       var hasContent = false;
-      for (var i = 0; i < choices.length; i++) {
-        var entry = describeOption(choices[i], side, i);
-        delete entry.index; // previews carry no index — not a commitment
-        for (var k in entry) {
-          if (Object.prototype.hasOwnProperty.call(entry, k)) hasContent = true;
+      try {
+        choices = currentPhase.Enumerate[cmd]();
+        if (!choices || !choices.length) return null;
+        for (var i = 0; i < choices.length; i++) {
+          var entry = describeOption(choices[i], side, i);
+          delete entry.index; // previews carry no index — not a commitment
+          for (var k in entry) {
+            if (Object.prototype.hasOwnProperty.call(entry, k)) hasContent = true;
+          }
+          // D09-2: second-level preview where the follow-up menu is
+          // enumerable from a PURE card/ability Enumerate (same safety
+          // class as the phase Enumerate above; still under the RNG
+          // guard). Class (a): playing an event whose card carries its
+          // own choice (Jailbreak's server). Class (b): triggering an
+          // ability with its own parameter list (Mayfly's "which
+          // subroutine"). Anything deeper, or any card whose follow-up
+          // is created by resolution, still arrives as a real select.
+          var subEnum = null;
+          var subThis = null;
+          if (choices[i].card && choices[i].card.cardType === "event" &&
+              typeof choices[i].card.Enumerate === "function") {
+            subEnum = choices[i].card.Enumerate;
+            subThis = choices[i].card;
+          } else if (choices[i].ability &&
+                     typeof choices[i].ability.Enumerate === "function") {
+            subEnum = choices[i].ability.Enumerate;
+            subThis = choices[i].card || choices[i].ability;
+          }
+          if (subEnum) {
+            try {
+              var sub = subEnum.call(subThis);
+              if (sub && sub.length) {
+                var subOut = [];
+                var subSeen = {};
+                var subUsable = true;
+                for (var s = 0; s < sub.length; s++) {
+                  var subEntry = describeOption(sub[s], side, s);
+                  delete subEntry.index;
+                  // A second level is only fusable when every entry is
+                  // visible AND distinct — hidden entries (Mutual
+                  // Favor's stack search) or duplicates would make the
+                  // fused choice ambiguous and first-match fulfillment
+                  // would commit an ARBITRARY card. Those follow-ups
+                  // stay real selects.
+                  if (subEntry.card && subEntry.card.hidden) { subUsable = false; break; }
+                  var key = stringify(stripEntry(subEntry));
+                  if (key === "{}" || subSeen[key]) { subUsable = false; break; }
+                  subSeen[key] = true;
+                  subOut.push(subEntry);
+                }
+                if (subUsable && subOut.length) entry.choices = subOut;
+              }
+            } catch (e2) {
+              /* second level is best-effort — omit on any failure */
+            }
+          }
+          out.push(entry);
         }
-        out.push(entry);
+      } finally {
+        Math.random = seededRandom;
       }
       if (!hasContent) return null; // subjectless — nothing to preview
       return out;
@@ -166,7 +213,12 @@
     pendingPreview[seat] = null;
     if (!pending || decisionType !== "select") return null;
     window.__harness.previewChecks++;
-    if (stringify(stripIndex(described)) === stringify(pending.preview)) return null;
+    // Compare with nested second-level previews stripped from both sides —
+    // actual select menus never carry a .choices field (D09-2).
+    if (
+      stringify(stripIndex(described).map(stripEntry)) ===
+      stringify(pending.preview.map(stripEntry))
+    ) return null;
     window.__harness.previewDivergences++;
     return {
       command: pending.command,
@@ -242,23 +294,40 @@
   }
 
   // Fuse a described command menu: each preview choice becomes a complete
-  // action entry; preview-less options pass through. Returns
-  // {options, map: fusedIdx -> {verbIndex, subject|null}}.
+  // action entry; preview-less options pass through. D09-2: a preview
+  // choice that itself carries a second-level preview (nested .choices)
+  // cross-products into entries with a `then` field — choosing one
+  // commits both steps, fulfilled in order. Returns
+  // {options, map: fusedIdx -> {verbIndex, subjects: [...]|null}}.
   function fuseCommandMenu(described) {
     var options = [];
     var map = [];
+    function pushFused(o, subj, sub) {
+      var entry = { index: options.length, command: o.command };
+      if (o.description) entry.description = o.description;
+      for (var k in subj) {
+        if (Object.prototype.hasOwnProperty.call(subj, k) && k !== "choices") entry[k] = subj[k];
+      }
+      var subjects = [stripEntry(subj)];
+      if (sub) {
+        entry.then = stripEntry(sub);
+        subjects.push(stripEntry(sub));
+      }
+      options.push(entry);
+      map.push({ verbIndex: o.index, subjects: subjects });
+    }
     for (var i = 0; i < described.length; i++) {
       var o = described[i];
       if (o.choices && o.choices.length) {
         for (var j = 0; j < o.choices.length; j++) {
-          var entry = { index: options.length, command: o.command };
-          if (o.description) entry.description = o.description;
           var subj = o.choices[j];
-          for (var k in subj) {
-            if (Object.prototype.hasOwnProperty.call(subj, k)) entry[k] = subj[k];
+          if (subj.choices && subj.choices.length) {
+            for (var j2 = 0; j2 < subj.choices.length; j2++) {
+              pushFused(o, subj, subj.choices[j2]);
+            }
+          } else {
+            pushFused(o, subj, null);
           }
-          options.push(entry);
-          map.push({ verbIndex: o.index, subject: stripEntry(subj) });
         }
       } else {
         var plain = {};
@@ -267,7 +336,7 @@
         }
         plain.index = options.length;
         options.push(plain);
-        map.push({ verbIndex: o.index, subject: null });
+        map.push({ verbIndex: o.index, subjects: null });
       }
     }
     return { options: options, map: map };
@@ -291,11 +360,55 @@
     var described = describeOptions(optionList, llmSeat);
     var divergence = checkPreviewDivergence(llmSeat, decisionType, described);
 
-    // D09 select fulfillment: a compound choice promised this subject.
+    // D09 select fulfillment: a compound choice promised subject(s) — a
+    // queue since D09-2 (two-level fusion). Match the head; on success
+    // consume it and keep any remainder for the NEXT select; on mismatch
+    // flush the whole queue and fall through to a real ask.
     var compoundChoice = -1;
     if (COMPOUND && decisionType === "select" && pendingCompound) {
-      compoundChoice = matchSubject(described, pendingCompound.subject);
-      pendingCompound = null; // one-shot; mismatch falls through to a real ask
+      compoundChoice = matchSubject(described, pendingCompound.queue[0]);
+      if (compoundChoice >= 0) {
+        pendingCompound.queue.shift();
+        if (pendingCompound.queue.length === 0) pendingCompound = null;
+      } else {
+        pendingCompound = null;
+      }
+    }
+
+    // D09-2 class (c): access-order folds. During breach, "which card to
+    // access next" is strategically null UNLESS a steal trigger could
+    // alter the rest of the sequence — pool-audited guard: fold only
+    // when the accessed server's root holds no unrezzed installed card
+    // (see design/D09-2-deeper-fusion.md for the audit). Answered with
+    // option 0 host-side; full record, no API call.
+    var orderFolded = false;
+    if (
+      COMPOUND &&
+      decisionType === "select" &&
+      compoundChoice < 0 &&
+      !pendingCompound &&
+      described.length > 1 &&
+      currentPhase &&
+      /^Run 5/.test(currentPhase.identifier || "")
+    ) {
+      var allCards = true;
+      for (var ci = 0; ci < described.length; ci++) {
+        if (!described[ci].card || described[ci].button || described[ci].ability) {
+          allCards = false;
+          break;
+        }
+      }
+      var rootSafe = false;
+      try {
+        rootSafe =
+          typeof attackedServer !== "undefined" &&
+          attackedServer &&
+          Array.isArray(attackedServer.root) &&
+          !attackedServer.root.some(function (c) { return !c.rezzed; });
+      } catch (e) {
+        rootSafe = false;
+      }
+      orderFolded = allCards && rootSafe;
     }
 
     // D09 command fusing: the model sees complete actions.
@@ -321,12 +434,18 @@
     // the model never sees it (it sees the authoritative actual menu).
     if (divergence) request.previewDivergence = divergence;
     if (fused) request.compound = true;
+    // D09-2: unbounded cross-products by review decision — but large
+    // menus are alerted for post-hoc inspection.
+    if (fused && fused.options.length >= 40) request.largeMenu = fused.options.length;
     var seq = request.seq;
     // D09: fulfilled select — host records it and answers the matched
     // index; no API call, no transcript entry.
     if (compoundChoice >= 0) {
       request.compoundFulfilled = true;
       request.compoundChoice = compoundChoice;
+    } else if (orderFolded) {
+      // D09-2 class (c): host records the fold and answers option 0.
+      request.orderFolded = true;
     }
     // D03: decisions with a single choice for the MODEL short-circuit at
     // the host (logged as forced, no API call). Under compound the model's
@@ -356,7 +475,7 @@
         }
         if (fused) {
           var m = fused.map[idx];
-          if (m.subject) pendingCompound = { subject: m.subject };
+          if (m.subjects) pendingCompound = { queue: m.subjects.slice() };
           notePreviewFromChoice(llmSeat, decisionType, described, m.verbIndex, seq);
           return m.verbIndex;
         }

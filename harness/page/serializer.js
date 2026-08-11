@@ -291,6 +291,9 @@
       state.run = {
         server: ServerName(attackedServer),
         approachIcePosition: approachIce, // 0 = innermost, -1 = none
+        // D09-2 rider (opus debrief Q5): total ice on the attacked server,
+        // so "position P of N, working inward" is computable at a glance.
+        iceCount: attackedServer.ice ? attackedServer.ice.length : 0,
       };
       if (typeof encounteredIce !== "undefined" && encounteredIce) {
         state.run.encounteredIce = cardEntry(encounteredIce, viewer);

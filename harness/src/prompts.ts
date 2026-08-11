@@ -134,7 +134,12 @@ Decision types:
   which subroutine, etc.). Option entries carry the card/server details.
 ACTIONS_MODE_PARAGRAPH
 
-Your state JSON shows "run" context while a run is in progress.
+Your state JSON shows "run" context while a run is in progress. Ice
+positions count from the server: position 0 is the INNERMOST piece; a
+run encounters the outermost (highest position) first and works inward.
+Advancement and other counters on facedown/hidden cards are public
+information — they appear in that entry's "counters" field even when
+the card itself shows as hidden.
 
 Notation: card text and log lines use bracket icons: [c] = credit,
 [click] = click, [sub] = subroutine, [mu] = memory unit, [trash] = trash
@@ -173,9 +178,11 @@ export const ACTIONS_PARAGRAPHS = {
   compound:
     "\nCommand options that carry a subject are COMPLETE actions: choosing\n" +
     '"install" with a named card installs that card; "run" with a server\n' +
-    'runs that server; "trigger" with an ability uses it. Follow-up\n' +
-    '"select" decisions appear only when a further choice remains (where\n' +
-    "to host, what to trash for memory, and so on).",
+    'runs that server; "trigger" with an ability uses it. Some entries\n' +
+    'also carry a "then" field showing the follow-up step they commit to\n' +
+    '(e.g. play Jailbreak then run R&D) — choosing such an entry performs\n' +
+    "both steps. Follow-up \"select\" decisions appear only when a further\n" +
+    "choice remains (where to host, what to trash for memory, and so on).",
   split:
     "\nCommand options that lead to a follow-up choice include a \"choices\"\n" +
     "list previewing that follow-up menu (e.g. \"play\" lists the events you\n" +
@@ -247,6 +254,11 @@ export interface PageDecisionRequest {
    *  and answers compoundChoice; no API call, no transcript entry. */
   compoundFulfilled?: boolean;
   compoundChoice?: number;
+  /** D09-2: access-order select folded by the structural guard — host
+   *  records it and answers 0; no API call. */
+  orderFolded?: boolean;
+  /** D09-2: fused menu length when at/over the alert threshold. */
+  largeMenu?: number;
 }
 
 function decisionHeader(request: PageDecisionRequest): string {
