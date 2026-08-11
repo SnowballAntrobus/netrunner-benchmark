@@ -31,10 +31,6 @@ jobs:
       - run: npx tsx src/cli.ts audit
       # M4 acceptance (keyless): full LLM-seat game via the mock client,
       # exercising the retry, fallback, forced (D03 auto-resolve) and
-      # compaction (D01) paths + JSONL schema validation. The lowered
-      # threshold exists because auto-resolve shrinks the transcript so
-      # much that the production 150K would never be crossed keylessly.
-      - run: npx tsx src/cli.ts llm-game --model mock --seed 7 --compact-threshold 40000
       # exercising the retry, fallback, forced (D03 auto-resolve),
       # compaction (D01) and compound-fulfillment (D09) paths + JSONL
       # schema validation. The lowered threshold exists because
