@@ -752,7 +752,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
         const turnStr = t ? `${t.side} turn ${t.number}` : "mulligan";
         const line = surface.live
           ? `▸ ${turnStr} · AP ${surface.live.corpAP}:${surface.live.runnerAP} ` +
-            `(corp:runner) · decisions ${surface.decisions}`
+            `(corp:runner) · decisions ${surface.decisions} (api ${record.llmDecisions})`
           : "▸ booting…";
         if (process.stdout.isTTY) {
           // In place on a TTY; padded so a shrinking line leaves no tail.
