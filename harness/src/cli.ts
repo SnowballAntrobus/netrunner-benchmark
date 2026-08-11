@@ -10,7 +10,8 @@
  *                   [--context conversational|stateless] [--history full|lean]
  *                   [--compact-threshold N] [--compact-keep N]
  *                   [--auto-resolve on|off] [--debrief on|off]
- *                   [--actions compound|split] [--seed N] ...
+ *                   [--actions compound|split] [--progress on|off]
+ *                   [--watch on|off] [--seed N] ...
  *    tsx src/cli.ts fetch-rules              # snapshot NSG learn-to-play guides
  *    tsx src/cli.ts audit [--file <game.json>] # conservation audit (default: golden fixtures)
  *    tsx src/cli.ts format --file <game.json>  # markdown game narratives (.report.md + .full.md)
@@ -170,6 +171,8 @@ if (command === "run-game") {
     autoResolve: arg("auto-resolve", "on") !== "off",
     debrief: arg("debrief", "on") !== "off",
     actions: arg("actions", "compound") === "split" ? "split" as const : "compound" as const,
+    progress: arg("progress", "off") === "on",
+    watch: arg("watch", "off") === "on",
     outDir,
   });
   console.log(summarize(record));

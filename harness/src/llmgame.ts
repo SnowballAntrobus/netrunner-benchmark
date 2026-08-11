@@ -4,6 +4,7 @@
  *  carries the engine's ReproductionCode, so every decision is a resumable
  *  position. */
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
+import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { launchBrowser, type GameRecord } from "./game.js";
 import { startServer } from "./server.js";
@@ -61,6 +62,17 @@ export interface LLMGameOptions {
    *  complete actions, page-fulfilling the follow-up select; "split" is
    *  the games-1/2 two-step comparison arm. */
   actions?: "compound" | "split";
+  /** Live progress line on stdout while the game runs: current turn,
+   *  agenda points, decision count. In-place (\r) on a TTY; one line per
+   *  turn change otherwise. Default false — keeps CI logs and scripted
+   *  runs clean. */
+  progress?: boolean;
+  /** Open a second terminal window streaming the model's reasoning live
+   *  (tail -f on the decision JSONL piped through jq — the same view
+   *  used to watch games 1/2 by hand). macOS opens Terminal.app;
+   *  Linux tries common emulators; either way the exact pipeline is
+   *  printed so it can be pasted manually. Default false. */
+  watch?: boolean;
   /** Exchanges kept verbatim through a compaction reset. */
   compactionKeepTurns?: number;
 }
@@ -186,6 +198,54 @@ export function validateDecisionRecord(r: DecisionRecord): string[] {
   return problems;
 }
 
+/** --watch: open a second terminal streaming the model's reasoning as it
+ *  lands in the decision JSONL — the tail|jq view used to follow games
+ *  1/2 by hand, now spawned automatically. Decision records print as
+ *  "#seq seat · phase" + reasoning; compaction records print their
+ *  summary (the model's memory of the dropped past). Forced/fulfilled/
+ *  corp records carry no reasoning and are skipped by the filter.
+ *  Best-effort: the pipeline is always printed for manual pasting, and a
+ *  failed spawn (headless box, no known emulator) is silently ignored. */
+function openReasoningWatch(decisionLogPath: string): void {
+  const jqProg =
+    'fromjson? | if .record_type == "compaction" then ' +
+    '"\\n═══ compaction #\\(.compaction_id): \\(.dropped_turns) exchanges → summary ═══\\n\\(.summary)\\n" ' +
+    'elif .reasoning != null then ' +
+    '"── #\\(.seq) \\(.seat) · \\(.phase.title // "?") ──\\n\\(.reasoning)\\n" ' +
+    "else empty end";
+  const shellCmd = `tail -n +1 -f "${decisionLogPath}" | jq -Rr '${jqProg}'`;
+  console.log(`watch: ${shellCmd}`);
+  const ignore = { stdio: "ignore" as const, detached: true };
+  try {
+    if (process.platform === "darwin") {
+      // AppleScript string: escape backslashes and double quotes.
+      const script =
+        'tell application "Terminal" to do script "' +
+        shellCmd.replace(/([\\"])/g, "\\$1") +
+        '"';
+      spawn("osascript", ["-e", script], ignore).unref();
+    } else {
+      // Linux best-effort: first emulator that spawns wins; args passed
+      // without a shell so no nested quoting.
+      const candidates: [string, string[]][] = [
+        ["gnome-terminal", ["--", "bash", "-c", shellCmd]],
+        ["konsole", ["-e", "bash", "-c", shellCmd]],
+        ["xterm", ["-e", "bash", "-c", shellCmd]],
+      ];
+      const tryNext = (i: number): void => {
+        const candidate = candidates[i];
+        if (!candidate) return;
+        const child = spawn(candidate[0], candidate[1], ignore);
+        child.on("error", () => tryNext(i + 1));
+        child.unref();
+      };
+      tryNext(0);
+    }
+  } catch {
+    /* watch is a convenience — the printed pipeline is the fallback */
+  }
+}
+
 export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord> {
   const { repoRoot, seed, corpPrecon, runnerPrecon, model, outDir } = options;
   const timeoutMs = options.timeoutMs ?? 7_200_000;
@@ -197,6 +257,8 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
   const autoResolve = options.autoResolve ?? true;
   const debrief = options.debrief ?? true;
   const actions = options.actions ?? "compound";
+  const progress = options.progress ?? false;
+  const watch = options.watch ?? false;
   const startedAt = Date.now();
   const gameId = `llm-${model.replace(/[^a-z0-9.-]/gi, "_")}-s${seed}-${startedAt}`;
 
@@ -228,6 +290,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
   const decisionLogPath = join(outDir, `${gameId}.jsonl`);
   await writeFile(decisionLogPath, "");
   await writeFile(join(outDir, `${gameId}-system-prompt.txt`), system);
+  if (watch) openReasoningWatch(decisionLogPath);
 
   const record: LLMGameRecord = {
     seed,
@@ -537,6 +600,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
 
     let lastDecisions = -1;
     let lastProgressAt = Date.now();
+    let lastProgressLine = "";
     for (;;) {
       const surface = (await page.evaluate(() => {
         const h = (
@@ -555,12 +619,37 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
             };
           }
         ).__harness;
+        // Live progress extras: current turn (bootstrap keeps
+        // __harness.turn updated) and agenda points straight from the
+        // engine's own AgendaPoints helper. Read-only; guarded so a
+        // mid-boot poll (globals not yet defined) degrades to null.
+        let live: {
+          turn: { side: string; number: number } | null;
+          corpAP: number;
+          runnerAP: number;
+        } | null = null;
+        try {
+          const w = window as unknown as {
+            AgendaPoints: (p: unknown) => number;
+            corp: unknown;
+            runner: unknown;
+            __harness: { turn?: { side: string; number: number } | null };
+          };
+          live = {
+            turn: w.__harness.turn ?? null,
+            corpAP: w.AgendaPoints(w.corp),
+            runnerAP: w.AgendaPoints(w.runner),
+          };
+        } catch {
+          live = null;
+        }
         return {
           done: h.done,
           decisions: h.decisions,
           turnCounts: h.turnCounts,
           errors: h.errors,
           result: h.result,
+          live,
         };
       })) as {
         done: boolean;
@@ -573,10 +662,30 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
           corpAgendaPoints: number;
           runnerAgendaPoints: number;
         } | null;
+        live: {
+          turn: { side: string; number: number } | null;
+          corpAP: number;
+          runnerAP: number;
+        } | null;
       };
       if (surface.decisions !== lastDecisions) {
         lastDecisions = surface.decisions;
         lastProgressAt = Date.now();
+      }
+      if (progress && surface.live) {
+        const t = surface.live.turn;
+        const turnStr = t ? `${t.side} turn ${t.number}` : "mulligan";
+        const line =
+          `▸ ${turnStr} · AP ${surface.live.corpAP}:${surface.live.runnerAP} ` +
+          `(corp:runner) · decisions ${surface.decisions}`;
+        if (process.stdout.isTTY) {
+          // In place on a TTY; padded so a shrinking line leaves no tail.
+          process.stdout.write("\r" + line.padEnd(64));
+        } else if (line !== lastProgressLine) {
+          // Non-TTY (piped/CI): one line per change, no \r spam.
+          process.stdout.write(line + "\n");
+        }
+        lastProgressLine = line;
       }
       if (apiAborted) {
         record.status = "crashed";
@@ -611,6 +720,9 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
         break;
       }
       await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    if (progress && process.stdout.isTTY && lastProgressLine) {
+      process.stdout.write("\r" + " ".repeat(64) + "\r"); // clear before summary
     }
 
     const finals = (await page.evaluate(() => {
