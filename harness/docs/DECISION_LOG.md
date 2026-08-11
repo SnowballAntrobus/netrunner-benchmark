@@ -148,6 +148,11 @@ stream:
                                    //   memory of the dropped past. When a
                                    //   later confabulation needs tracing,
                                    //   start here.
+  "summary_truncated": false,      // true = the summary hit the response
+                                   //   cap and is clipped mid-thought —
+                                   //   treat later confabulations in that
+                                   //   epoch accordingly (absent on
+                                   //   pre-sonnet-incident records)
   "model": "...", "tokens_in": ..., "tokens_out": ..., "latency_ms": ...
 }
 ```

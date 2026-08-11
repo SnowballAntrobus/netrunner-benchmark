@@ -189,7 +189,10 @@ if (command === "run-game") {
   console.log(
     `tokens in=${record.usage.tokensIn} out=${record.usage.tokensOut} ` +
     `cacheRead=${record.usage.cacheRead} cacheWrite=${record.usage.cacheWrite} ` +
-    `compactions=${record.compactions} transcriptMax=${record.transcriptTokensMax}`
+    `compactions=${record.compactions} transcriptMax=${record.transcriptTokensMax}` +
+    (record.compactionsSuppressed > 0
+      ? ` ⚠ compactions-suppressed=${record.compactionsSuppressed} (compact-threshold below viable floor — raise it; see PROMPTING.md)`
+      : "")
   );
   console.log(
     `previews followed=${record.previewChecks} diverged=${record.previewDivergences}` +
@@ -248,10 +251,20 @@ if (command === "run-game") {
   }
   process.exit(record.status === "completed" && record.invalidRecords === 0 ? 0 : 1);
 } else if (command === "format") {
-  const file = arg("file", "");
+  let file = arg("file", "");
   if (!file) {
     console.error("format requires --file <game.json>");
     process.exit(2);
+  }
+  // Any sibling artifact resolves to the game record — pasting the
+  // debrief/JSONL/system-prompt path is common and should just work.
+  const canonical = file
+    .replace(/-debrief\.json$/, ".json")
+    .replace(/-system-prompt\.txt$/, ".json")
+    .replace(/\.jsonl$/, ".json");
+  if (canonical !== file) {
+    console.log(`(formatting the game record: ${canonical})`);
+    file = canonical;
   }
   const jsonl = file.replace(/\.json$/, ".jsonl");
   const { existsSync } = await import("node:fs");

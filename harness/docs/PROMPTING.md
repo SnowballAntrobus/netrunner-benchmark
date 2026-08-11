@@ -74,11 +74,23 @@ literature triangulates it from three directions:
   re-sends the FRESH state every decision — board facts never rely on
   deep-context retrieval — but they firmly argue against pushing the
   threshold toward the window limit.
-- **A floor from our own message sizes.** Post-compaction baseline under
-  `--history full` ≈ system (~33K) + summary + 20 full exchanges
-  (~60–80K) ≈ 100–115K, so thresholds below ~130K would thrash
-  (compaction every few decisions). Under `--history lean` the baseline
-  collapses and much lower thresholds become experimentally available.
+- **A floor from our own message sizes — now measured, and guarded.**
+  Post-compaction baseline under `--history full` ≈ system (~33K) +
+  summary + 20 full exchanges ≈ 95–115K, so thresholds below ~130K
+  thrash. CONFIRMED empirically: a sonnet-5 run at `--compact-threshold
+  100000` over a ~95K floor produced 13 compactions in 12 turns,
+  degenerating to one every 2–9 decisions with `dropped_turns` collapsing
+  13→2 (15% of all API calls were summaries). Two defenses now exist:
+  the Transcript floor guard refuses over-threshold compactions that
+  can't drop ≥3 exchanges or haven't grown ≥ max(8K, threshold/10) past
+  the post-compaction floor — vetoes are counted on the game record
+  (`compactionsSuppressed`, warned in the CLI summary); and compaction
+  summaries are never clipped (the same incident cut EVERY summary
+  mid-sentence at the old 2048-token response cap — now 8192 with a
+  `summary_truncated` flag on compaction records). The guard makes a
+  misconfigured threshold safe, not correct: if the warning fires, raise
+  the threshold. Under `--history lean` the baseline collapses and much
+  lower thresholds become experimentally available.
 - **Caution on what compaction can fix.** Vending-Bench
   (arXiv:2502.15840) found long-horizon agent breakdowns do NOT correlate
   with context-window fill — coherence failures are behavioral, not

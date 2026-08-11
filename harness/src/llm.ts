@@ -55,6 +55,10 @@ export interface SummaryResult {
   text: string;
   usage: Usage;
   latencyMs: number;
+  /** True when the response hit max_tokens — a clipped summary is a
+   *  corrupted memory (sonnet incident: every compaction summary was cut
+   *  mid-sentence at the old 2048 cap) and must be visible in records. */
+  truncated: boolean;
 }
 
 export interface ChoiceClient {
@@ -175,7 +179,7 @@ export class AnthropicClient implements ChoiceClient {
     const startedAt = Date.now();
     const response = await this.client.messages.create({
       model: this.model,
-      max_tokens: 2048,
+      max_tokens: 8192, // summaries are the model's whole memory — never clip
       system: [
         { type: "text", text: system, cache_control: { type: "ephemeral" } },
       ],
@@ -186,7 +190,12 @@ export class AnthropicClient implements ChoiceClient {
       .map((b) => b.text)
       .join("\n")
       .trim();
-    return { text, usage: usageOf(response), latencyMs: Date.now() - startedAt };
+    return {
+      text,
+      usage: usageOf(response),
+      latencyMs: Date.now() - startedAt,
+      truncated: response.stop_reason === "max_tokens",
+    };
   }
 }
 
@@ -251,6 +260,7 @@ export class MockClient implements ChoiceClient {
       text: "mock: free-text response (summarize path exercised keylessly).",
       usage: this.estimateUsage(system, messages),
       latencyMs: 0,
+      truncated: false,
     };
   }
 }
@@ -272,6 +282,17 @@ export class Transcript {
    *  compaction, whose reshuffle invalidates the estimate). */
   promptTokens: number | null = null;
   compactions = 0;
+  /** First observed request size after a compaction — the irreducible
+   *  floor of system + summary + kept exchanges. When the configured
+   *  threshold sits at/below this floor, compacting again reclaims
+   *  nothing (sonnet incident: threshold 100K over a ~95K floor produced
+   *  13 compactions in one game, thrashing every 2-9 decisions). */
+  private postCompactionBaseline: number | null = null;
+  private awaitingBaseline = false;
+  /** Decisions at which the floor guard vetoed a compaction while over
+   *  threshold — surfaced on the game record; >0 means the threshold is
+   *  configured below its viable floor for this model/config. */
+  floorSuppressed = 0;
 
   constructor(
     readonly threshold: number,
@@ -295,14 +316,31 @@ export class Transcript {
 
   notePromptTokens(n: number): void {
     this.promptTokens = n;
+    if (this.awaitingBaseline) {
+      this.postCompactionBaseline = n;
+      this.awaitingBaseline = false;
+    }
   }
 
   shouldCompact(): boolean {
-    return (
-      this.promptTokens !== null &&
-      this.promptTokens > this.threshold &&
-      this.turns.length > this.keepPairs * 2
-    );
+    if (this.promptTokens === null || this.promptTokens <= this.threshold) {
+      return false;
+    }
+    // Floor guard (sonnet incident): a compaction must be able to reclaim
+    // real space. Require (a) at least 3 droppable exchanges beyond the
+    // kept window, and (b) growth of ≥ max(8K, threshold/10) over the
+    // post-compaction floor — otherwise compacting burns a summarize call
+    // to shave a couple of exchanges and re-triggers immediately.
+    const droppable = Math.floor(this.turns.length / 2) - this.keepPairs;
+    const minGrowth = Math.max(8000, Math.floor(this.threshold / 10));
+    const floorOk =
+      this.postCompactionBaseline === null ||
+      this.promptTokens >= this.postCompactionBaseline + minGrowth;
+    if (droppable < 3 || !floorOk) {
+      this.floorSuppressed++;
+      return false;
+    }
+    return true;
   }
 
   /** Replace the transcript with [notice] + [model's own summary] + the
@@ -323,6 +361,7 @@ export class Transcript {
       ...kept,
     ];
     this.promptTokens = null;
+    this.awaitingBaseline = true; // next observation is the new floor
     this.compactions++;
     return { droppedPairs, keptPairs: Math.floor(kept.length / 2) };
   }

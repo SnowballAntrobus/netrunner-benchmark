@@ -131,6 +131,12 @@ export async function formatGame(
   const game = JSON.parse(await readFile(gamePath, "utf-8")) as Record<string, unknown> & {
     log: string[];
   };
+  if (!Array.isArray(game.log)) {
+    throw new Error(
+      `${gamePath} is not a game record (no log[]) — pass the out/<game>.json ` +
+        `written by llm-game, not a debrief/JSONL/system-prompt sibling`
+    );
+  }
   let decisions: DecisionRow[] = [];
   let compactionRows: CompactionRow[] = [];
   if (jsonlPath) {

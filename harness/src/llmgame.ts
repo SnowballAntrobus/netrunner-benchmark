@@ -141,6 +141,8 @@ export interface CompactionRecord {
   dropped_turns: number; // exchanges compacted into the summary
   kept_turns: number; // exchanges kept verbatim
   summary: string;
+  /** True when the summary hit the response cap — clipped memory. */
+  summary_truncated?: boolean;
   model: string;
   tokens_in: number;
   tokens_out: number;
@@ -165,6 +167,10 @@ export interface LLMGameRecord extends GameRecord {
   retriesTotal: number;
   fallbacks: number;
   compactions: number;
+  /** Decisions where the floor guard vetoed an over-threshold compaction —
+   *  >0 means compact-threshold is configured below its viable floor
+   *  (system + summary + kept exchanges) for this model/config. */
+  compactionsSuppressed: number;
   transcriptTokensMax: number;
   /** D05: previews followed into their select (comparisons made) and how
    *  many diverged. Divergent selects carry `preview_divergence`. */
@@ -323,6 +329,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
     retriesTotal: 0,
     fallbacks: 0,
     compactions: 0,
+    compactionsSuppressed: 0,
     transcriptTokensMax: 0,
     previewChecks: 0,
     previewDivergences: 0,
@@ -478,6 +485,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
             dropped_turns: droppedPairs,
             kept_turns: keptPairs,
             summary: summary.text,
+            summary_truncated: summary.truncated,
             model,
             tokens_in: summary.usage.tokensIn,
             tokens_out: summary.usage.tokensOut,
@@ -681,12 +689,13 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
         lastDecisions = surface.decisions;
         lastProgressAt = Date.now();
       }
-      if (progress && surface.live) {
-        const t = surface.live.turn;
+      if (progress) {
+        const t = surface.live?.turn;
         const turnStr = t ? `${t.side} turn ${t.number}` : "mulligan";
-        const line =
-          `▸ ${turnStr} · AP ${surface.live.corpAP}:${surface.live.runnerAP} ` +
-          `(corp:runner) · decisions ${surface.decisions}`;
+        const line = surface.live
+          ? `▸ ${turnStr} · AP ${surface.live.corpAP}:${surface.live.runnerAP} ` +
+            `(corp:runner) · decisions ${surface.decisions}`
+          : "▸ booting…";
         if (process.stdout.isTTY) {
           // In place on a TTY; padded so a shrinking line leaves no tail.
           process.stdout.write("\r" + line.padEnd(64));
@@ -731,7 +740,10 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
     if (progress && process.stdout.isTTY && lastProgressLine) {
-      process.stdout.write("\r" + " ".repeat(64) + "\r"); // clear before summary
+      // Finalize (don't clear): the last progress line stays in scrollback
+      // as evidence of the run's shape — with --watch stealing window
+      // focus, a cleared line looked like the feature never ran.
+      process.stdout.write("\r" + lastProgressLine.padEnd(64) + "\n");
     }
 
     const finals = (await page.evaluate(() => {
@@ -822,6 +834,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
   } catch (e) {
     record.errors.push(`host: ${String(e)}`);
   } finally {
+    if (transcript) record.compactionsSuppressed = transcript.floorSuppressed;
     record.durationMs = Date.now() - startedAt;
     const totalTurns = record.turns ? record.turns.corp + record.turns.runner : 0;
     record.msPerTurn = totalTurns > 0 ? Math.round(record.durationMs / totalTurns) : null;
