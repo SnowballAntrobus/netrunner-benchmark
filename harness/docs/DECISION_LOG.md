@@ -1,6 +1,6 @@
 # Reading the decision log
 
-Every LLM game writes `out/<game_id>.jsonl` — one JSON record per decision,
+Every LLM game writes `out/<game_id>/decisions.jsonl` — one JSON record per decision,
 **both seats interleaved in game order**. This is the primary research
 artifact: win rates come from the game record, but everything about *how*
 a model played comes from here.

@@ -5,10 +5,9 @@
  *  stream (the LLM's choices and reasoning) into a readable markdown
  *  narrative, one section per turn.
  *
- *  Two artifacts per game:
- *    <id>.report.md — abbreviated: forced single-option decisions
- *                     collapsed into counters; the review copy.
- *    <id>.full.md   — every decision with its full option menu.
+ *  One artifact per game: full.md — every decision with its full option
+ *  menu (forced runs collapsed inline). The abbreviated report view was
+ *  retired in the D06-1 corpus revision.
  *
  *  Runner decisions are anchored into the narration via each record's
  *  state.log tail (its last public line located in the full log); corp
@@ -16,6 +15,7 @@
  *  positions in the log stream.
  */
 import { readFile, writeFile } from "node:fs/promises";
+import { resolveGameArtifacts } from "./paths.js";
 
 interface DecisionRow {
   record_type?: string; // absent (game 1) or "decision" | "compaction"
@@ -453,12 +453,13 @@ export async function formatGame(
   return { full: render(true) };
 }
 
-// D07: debrief artifact rendered at the end of both views. Read from the
-// sibling <stem>-debrief.json when present.
+// D07: debrief artifact rendered at the end of the narrative. Resolved
+// through the artifact layout (nested run folder or legacy flat stem).
 async function debriefSection(gamePath: string): Promise<string> {
   try {
-    const stem = gamePath.replace(/\.json$/, "");
-    const d = JSON.parse(await readFile(`${stem}-debrief.json`, "utf-8")) as {
+    const d = JSON.parse(
+      await readFile(resolveGameArtifacts(gamePath).debrief, "utf-8")
+    ) as {
       instrument_version: number;
       text: string;
     };
@@ -478,8 +479,8 @@ async function debriefSection(gamePath: string): Promise<string> {
 
 export async function writeFormatted(gamePath: string, jsonlPath: string | null): Promise<string[]> {
   const { full } = await formatGame(gamePath, jsonlPath);
-  const stem = gamePath.replace(/\.json$/, "");
+  const out = resolveGameArtifacts(gamePath).fullMd;
   const debrief = await debriefSection(gamePath);
-  await writeFile(`${stem}.full.md`, full + debrief);
-  return [`${stem}.full.md`];
+  await writeFile(out, full + debrief);
+  return [out];
 }

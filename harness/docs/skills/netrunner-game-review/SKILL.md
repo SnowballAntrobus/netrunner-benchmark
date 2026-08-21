@@ -30,10 +30,13 @@ notes respectfully corrected with evidence, findings classified, and a
 
 ## Inputs
 
-- `harness/out/<game_id>.json` — game record (counters, usage, full log)
-- `harness/out/<game_id>.jsonl` — per-decision records, both seats
-- `harness/out/<game_id>-debrief.json` — postgame self-report (v2+:
-  `final_events` catch-up + verdict)
+- `harness/out/<game_id>/` (or `harness/data/games/<game_id>/`):
+  `record.json` (counters, usage, full log), `decisions.jsonl`
+  (per-decision records, both seats), `debrief.json` (postgame
+  self-report; v2+: `final_events` catch-up + verdict). Legacy flat
+  games use `<game_id>.json` / `.jsonl` / `-debrief.json` stems.
+- `harness/data/CORPUS.md` — the cumulative report; place this game
+  against it
 - optionally: the human's manual notes on the formatted report
 
 ## Pass 1 — machinery health (always, before any gameplay analysis)

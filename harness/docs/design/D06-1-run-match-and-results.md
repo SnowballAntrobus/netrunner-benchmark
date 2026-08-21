@@ -1,6 +1,11 @@
 # D06 §1 rev 2 — The corpus: durable data, progressive report, then batching
 
-**Status: revised per review — awaiting re-review** · Original scope
+**Status: §§1–3 implemented** (nested run folders per the review
+amendment — `out/<game_id>/` with canonical names, `src/paths.ts`
+resolving both layouts, all tools accepting folders; `corpus
+--promote/--report` + `src/prices.ts` live; first CORPUS.md generated
+from the three era-3 games. §4 run-match remains to build, as the D12
+vehicle.) · Original scope
 (match runner first) inverted by Dante's directive: every run costs
 money, so analysis must be CUMULATIVE over everything already in
 `out/`, with the data itself versioned on GitHub and a report that
@@ -25,16 +30,42 @@ DERIVED from its record fields (presence of `record_type`,
 `compound`, `order_folded`, `actions`, `contextMode`) — no manual
 tagging, so the report can never mislabel a run.
 
-## §2 Data on GitHub
+## §2 Data on GitHub — and one folder per run (review amendment)
+
+Every run's artifacts live in ONE nested folder, in both scratch and
+corpus (Dante's amendment: `out/` was becoming an unmanageable flat
+pile of stems):
 
 ```
+harness/out/<game_id>/           # scratch (gitignored)
+  record.json                    # game record
+  decisions.jsonl                # decision log
+  debrief.json                   # when present
+  system-prompt.txt
+  full.md                        # regenerable narrative
+
 harness/data/
-  games/<game_id>.json           # game record
-  games/<game_id>.jsonl          # decision log
-  games/<game_id>-debrief.json   # when present
-  games/<game_id>-system-prompt.txt
+  games/<game_id>/               # tracked corpus — CURRENT ERA ONLY,
+    record.json ...              #   INCLUDING full.md (review amendment:
+                                 #   the narrative rides with the data;
+                                 #   promote regenerates it)
   CORPUS.md                      # the progressive report (§3)
+
+harness/local/games/<game_id>/  # gitignored — prior-era games parked
+                                 #   for the eventual research write-up;
+                                 #   NOT in the corpus or CORPUS.md
+                                 #   (review amendment: prior eras were
+                                 #   bloating both)
 ```
+
+Inside a folder the names are canonical (`record.json`, not
+`<game_id>.json`) — the folder carries the identity. Tools accept
+either the folder or its `record.json`, and sibling resolution
+(decisions/debrief lookup in format, replay, watch) is folder-based.
+**Flat-layout tolerance**: existing flat games in `out/` keep working
+(stem-sibling fallback), and `corpus --promote` NORMALIZES a flat
+game into the nested shape on its way into `data/` — promotion is the
+migration.
 
 - `harness/out/` stays scratch (gitignored); `harness/data/` is
   tracked. Total current corpus ≈ 25MB of JSONL — plain git, no LFS.

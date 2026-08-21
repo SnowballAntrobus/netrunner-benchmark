@@ -728,7 +728,11 @@
       steps = lines.map(function (l) { return { rec: parse(l) }; });
       gameRecord = results[1];
       steps.push({ kind: "result" });
-      var debriefPath = srcPath.replace(/\.jsonl$/, "-debrief.json");
+      // Nested layout: <run>/decisions.jsonl → <run>/debrief.json;
+      // legacy flat: <id>.jsonl → <id>-debrief.json.
+      var debriefPath = /decisions\.jsonl$/.test(srcPath)
+        ? srcPath.replace(/decisions\.jsonl$/, "debrief.json")
+        : srcPath.replace(/\.jsonl$/, "-debrief.json");
       fetch(debriefPath).then(function (r) { return r.ok ? r.json() : null; })
         .then(function (d) { debrief = d; })
         .catch(function () {});

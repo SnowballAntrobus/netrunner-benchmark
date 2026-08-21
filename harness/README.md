@@ -59,10 +59,15 @@ npm run format -- --file out/<game>.json      # markdown narrative: .full.md (ev
 npm test                                      # typecheck + determinism
 ```
 
-LLM games write three artifacts to `out/`: the game record JSON, the full
-system prompt, and a JSONL decision log — one record per decision (both
-seats), each carrying the engine's ReproductionCode so any position can be
-replayed. **See docs/DECISION_LOG.md for the annotated format guide.**
+LLM games write one folder per run — `out/<game_id>/` with `record.json`,
+`decisions.jsonl` (one record per decision, both seats, each carrying the
+engine's ReproductionCode), `system-prompt.txt`, `debrief.json`, and the
+generated `full.md`. Every tool accepts the run folder or any file in it
+(legacy flat games still resolve). Promote finished runs into the tracked
+corpus with `npx tsx src/cli.ts corpus --promote out/<game_id>` — this
+copies the run into `data/games/` and regenerates `data/CORPUS.md`, the
+progressive cross-run report. **See docs/DECISION_LOG.md for the record
+format guide.**
 
 Rules text for the system prompt comes from NSG's official learn-to-play
 guides (`npm run fetch-rules` once, review the extracted text, commit the

@@ -261,35 +261,30 @@ if (command === "run-game") {
   }
   process.exit(record.status === "completed" && record.invalidRecords === 0 ? 0 : 1);
 } else if (command === "format") {
-  let file = arg("file", "");
+  const file = arg("file", "");
   if (!file) {
-    console.error("format requires --file <game.json>");
+    console.error("format requires --file <run folder or game record>");
     process.exit(2);
   }
-  // Any sibling artifact resolves to the game record — pasting the
-  // debrief/JSONL/system-prompt path is common and should just work.
-  const canonical = file
-    .replace(/-debrief\.json$/, ".json")
-    .replace(/-system-prompt\.txt$/, ".json")
-    .replace(/\.jsonl$/, ".json");
-  if (canonical !== file) {
-    console.log(`(formatting the game record: ${canonical})`);
-    file = canonical;
-  }
-  const jsonl = file.replace(/\.json$/, ".jsonl");
+  // Run folder, any nested artifact, or any legacy stem sibling — all
+  // resolve to the same artifact set.
+  const { resolveGameArtifacts } = await import("./paths.js");
+  const art = resolveGameArtifacts(file);
   const { existsSync } = await import("node:fs");
-  const written = await writeFormatted(file, existsSync(jsonl) ? jsonl : null);
+  const written = await writeFormatted(art.record, existsSync(art.jsonl) ? art.jsonl : null);
   for (const w of written) console.log(w);
   process.exit(0);
 } else if (command === "replay") {
   const file = arg("file", "");
   if (!file) {
-    console.error("replay requires --file <game.json>");
+    console.error("replay requires --file <run folder or game record>");
     process.exit(2);
   }
   const { relative, sep } = await import("node:path");
-  const abs = resolve(file);
-  const jsonlAbs = abs.replace(/\.json$/, ".jsonl");
+  const { resolveGameArtifacts } = await import("./paths.js");
+  const replayArt = resolveGameArtifacts(resolve(file));
+  const abs = replayArt.record;
+  const jsonlAbs = replayArt.jsonl;
   const rel = (p: string): string => "/" + relative(repoRoot, p).split(sep).join("/");
   const { startServer } = await import("./server.js");
   const staticServer = await startServer(repoRoot);
@@ -332,9 +327,36 @@ if (command === "run-game") {
   console.log(`  ${url}`);
   console.log("Open in a browser; ← → keys step decisions. Ctrl-C to stop.");
   await new Promise(() => { /* stay up until interrupted */ });
+} else if (command === "corpus") {
+  // D06-1 rev 2: explicit promotion into harness/data/games/ + the
+  // progressive CORPUS.md report. `--promote <run>` accepts a run
+  // folder, record.json, or legacy stem; repeatable. `--report` alone
+  // regenerates from what's already promoted.
+  const { promote, writeReport } = await import("./corpus.js");
+  const partial = process.argv.includes("--partial");
+  const promotes: string[] = [];
+  for (let i = 0; i < process.argv.length; i++) {
+    if (process.argv[i] === "--promote" && process.argv[i + 1]) {
+      promotes.push(process.argv[i + 1]!);
+    }
+  }
+  for (const p of promotes) {
+    const dest = await promote(repoRoot, p, partial);
+    console.log(`promoted → ${dest}`);
+  }
+  const reportPath = await writeReport(repoRoot);
+  console.log(reportPath);
+  process.exit(0);
 } else if (command === "audit") {
   const file = arg("file", "");
-  const results = file ? [await auditFile(repoRoot, file)] : await auditGolden(repoRoot);
+  const results = file
+    ? [
+        await auditFile(
+          repoRoot,
+          (await import("./paths.js")).resolveGameArtifacts(file).record
+        ),
+      ]
+    : await auditGolden(repoRoot);
   process.exit(reportAudit(results));
 } else if (command === "fetch-rules") {
   await fetchRules(repoRoot);

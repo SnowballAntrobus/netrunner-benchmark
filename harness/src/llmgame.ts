@@ -302,10 +302,14 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
       ? new Transcript(compactionThreshold, compactionKeepTurns)
       : null;
 
-  await mkdir(outDir, { recursive: true });
-  const decisionLogPath = join(outDir, `${gameId}.jsonl`);
+  // D06-1 rev 2: one folder per run — every artifact for this game lives
+  // in out/<gameId>/ under canonical names (src/paths.ts resolves both
+  // this and the legacy flat layout).
+  const runDir = join(outDir, gameId);
+  await mkdir(runDir, { recursive: true });
+  const decisionLogPath = join(runDir, "decisions.jsonl");
   await writeFile(decisionLogPath, "");
-  await writeFile(join(outDir, `${gameId}-system-prompt.txt`), system);
+  await writeFile(join(runDir, "system-prompt.txt"), system);
   if (watch) openReasoningWatch(decisionLogPath);
 
   const record: LLMGameRecord = {
@@ -864,7 +868,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
         record.usage.tokensOut += result.usage.tokensOut;
         record.usage.cacheRead += result.usage.cacheRead;
         record.usage.cacheWrite += result.usage.cacheWrite;
-        const debriefPath = join(outDir, `${gameId}-debrief.json`);
+        const debriefPath = join(runDir, "debrief.json");
         await writeFile(
           debriefPath,
           JSON.stringify(
@@ -899,7 +903,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
     await context.close();
     await browser.close();
     await staticServer.close();
-    await writeFile(join(outDir, `${gameId}.json`), JSON.stringify(record, null, 1));
+    await writeFile(join(runDir, "record.json"), JSON.stringify(record, null, 1));
   }
   return record;
 }
