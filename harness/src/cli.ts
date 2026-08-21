@@ -10,8 +10,8 @@
  *                   [--context conversational|stateless] [--history full|lean]
  *                   [--compact-threshold N] [--compact-keep N]
  *                   [--auto-resolve on|off] [--debrief on|off]
- *                   [--actions compound|split] [--progress on|off]
- *                   [--watch on|off] [--seed N] ...
+ *                   [--actions compound|split] [--progress [on|off]]
+ *                   [--watch [on|off]] [--seed N] ...  (bare --progress/--watch = on)
  *    tsx src/cli.ts fetch-rules              # snapshot NSG learn-to-play guides
  *    tsx src/cli.ts audit [--file <game.json>] # conservation audit (default: golden fixtures)
  *    tsx src/cli.ts format --file <game.json>  # markdown game narratives (.report.md + .full.md)
@@ -58,6 +58,41 @@ function arg(name: string, fallback: string): string {
   const i = process.argv.indexOf(`--${name}`);
   const v = i > -1 ? process.argv[i + 1] : undefined;
   return v ?? fallback;
+}
+
+/** On/off flag that also accepts the bare form: `--progress` alone means
+ *  "on" (the next token being another --flag, or nothing, is not a
+ *  value). `--progress on|off` still works. Absent → false. */
+function boolArg(name: string): boolean {
+  const i = process.argv.indexOf(`--${name}`);
+  if (i === -1) return false;
+  const v = process.argv[i + 1];
+  if (v === undefined || v.startsWith("--")) return true; // bare flag
+  return v !== "off";
+}
+
+// Default compact-threshold by model, longest-prefix match. Rationale
+// lives at the llm-game call site; keep entries ordered here by
+// specificity only (the code picks the longest matching prefix).
+const THRESHOLD_DEFAULTS: [prefix: string, threshold: string][] = [
+  ["openrouter/mistralai/", "200000"], // 262K windows (small-2603, medium-3-5)
+  ["openrouter/tencent/hy3", "200000"], // 262K window
+  // 131K window — smallest in the bench; 100K ≈ 75% of it, but this sits
+  // close to the transcript floor, so expect frequent compaction; if the
+  // record shows compactionsSuppressed > 0 the model can't fit our config
+  // and that is itself the finding.
+  ["openrouter/meta/muse-glimmer-30b", "100000"],
+  ["openrouter/", "300000"], // D13 cohort: 400K-1M windows
+  ["claude-opus", "300000"], // 1M window; measured on D09-2 opus game
+];
+
+function defaultCompactThreshold(model: string): string {
+  let best: [string, string] | null = null;
+  for (const entry of THRESHOLD_DEFAULTS) {
+    if (model.startsWith(entry[0]) && (!best || entry[0].length > best[0].length))
+      best = entry;
+  }
+  return best ? best[1] : "150000";
 }
 
 function summarize(r: GameRecord): string {
@@ -168,23 +203,30 @@ if (command === "run-game") {
     reasoningStyle,
     contextMode,
     historyVariant,
-    // Per-model knob. 150K suits 200K-window models (haiku, sonnet).
-    // Opus (1M window) defaults to 300K: measured on the opus D09-2 game,
+    // Per-model knob, longest-prefix matched against THRESHOLD_DEFAULTS
+    // below. 150K suits 200K-window models (haiku, sonnet). Opus
+    // (1M window) defaults to 300K: measured on the opus D09-2 game,
     // 150K produced 7 compactions with epochs decaying to ~7-10 API
     // decisions (fused menus fatten each message, raising the kept-window
     // floor) and cost ~$19.80 vs ~$12.20 pre-fusion — the threshold must
-    // clear the floor with real headroom. Explicit flag always wins.
-    // See PROMPTING.md "Choosing the threshold".
+    // clear the floor with real headroom. The D13 cohort (windows
+    // 400K-1M; token counts are each provider's own tokenizer, so the
+    // observed-size comparison is like-for-like per provider) also
+    // defaults to 300K — 75% of the smallest cohort window, and inside
+    // the effective-context comfort band for the 1M ones. Mistral models
+    // are the exception: 262K windows, so the same ~75% ratio gives 200K
+    // (a 300K threshold would blow the window before compaction fired).
+    // Explicit flag always wins. See PROMPTING.md "Choosing the threshold".
     compactionThreshold: parseInt(
-      arg("compact-threshold", model.startsWith("claude-opus") ? "300000" : "150000"),
+      arg("compact-threshold", defaultCompactThreshold(model)),
       10
     ),
     compactionKeepTurns: parseInt(arg("compact-keep", "20"), 10),
     autoResolve: arg("auto-resolve", "on") !== "off",
     debrief: arg("debrief", "on") !== "off",
     actions: arg("actions", "compound") === "split" ? "split" as const : "compound" as const,
-    progress: arg("progress", "off") === "on",
-    watch: arg("watch", "off") === "on",
+    progress: boolArg("progress"),
+    watch: boolArg("watch"),
     outDir,
   });
   console.log(summarize(record));

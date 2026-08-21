@@ -313,22 +313,55 @@ export class OpenRouterClient implements ChoiceClient {
     this.key = key;
   }
 
+  /** Transient-failure retries survived this game (429s, 5xx, network
+   *  blips). The Anthropic SDK does this invisibly; here we do it
+   *  explicitly and count it — per-provider flakiness is itself a
+   *  reportable difference. */
+  httpRetries = 0;
+
+  // Deterministic backoff (no jitter — nothing here touches game RNG).
+  // 429s honor Retry-After when the gateway sends one. The 60s ceiling
+  // exists for per-model RPM limits (e.g. OpenRouter's new-account
+  // 10 rpm), which need a full-window wait, not a quick nudge.
+  private static readonly BACKOFF_MS = [2000, 5000, 10000, 20000, 40000, 60000];
+
   private async post(body: Record<string, unknown>): Promise<ORResponse> {
-    const res = await fetch(OPENROUTER_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${this.key}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ ...body, model: this.slug, usage: { include: true } }),
-    });
-    const json = (await res.json()) as ORResponse;
-    if (!res.ok || json.error) {
-      throw new Error(
-        `OpenRouter ${res.status}: ${json.error?.message ?? "request failed"}`
+    let lastError: Error = new Error("OpenRouter: no attempt made");
+    for (let attempt = 0; attempt <= OpenRouterClient.BACKOFF_MS.length; attempt++) {
+      let res: Response | null = null;
+      try {
+        res = await fetch(OPENROUTER_URL, {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${this.key}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ ...body, model: this.slug, usage: { include: true } }),
+        });
+        const json = (await res.json().catch(() => ({}))) as ORResponse;
+        if (res.ok && !json.error) return json;
+        lastError = new Error(
+          `OpenRouter ${res.status}: ${json.error?.message ?? "request failed"}`
+        );
+      } catch (e) {
+        // fetch itself failed (network) or other transport error
+        lastError = e instanceof Error ? e : new Error(String(e));
+      }
+      const status = res?.status ?? 0;
+      const retryable = status === 429 || status >= 500 || status === 0;
+      if (!retryable || attempt === OpenRouterClient.BACKOFF_MS.length) break;
+      const retryAfterS = parseFloat(res?.headers.get("retry-after") ?? "");
+      const waitMs = Number.isFinite(retryAfterS)
+        ? Math.min(Math.max(retryAfterS * 1000, 1000), 90000)
+        : OpenRouterClient.BACKOFF_MS[attempt]!;
+      this.httpRetries++;
+      process.stderr.write(
+        `[openrouter] transient failure (${lastError.message}); ` +
+          `retry ${attempt + 1}/${OpenRouterClient.BACKOFF_MS.length} in ${waitMs / 1000}s\n`
       );
+      await new Promise((r) => setTimeout(r, waitMs));
     }
-    return json;
+    throw lastError;
   }
 
   private messagesFor(system: string, messages: ChatMessage[]): ORMessage[] {

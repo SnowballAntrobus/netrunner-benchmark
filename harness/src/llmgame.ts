@@ -175,6 +175,10 @@ export interface LLMGameRecord extends GameRecord {
   forcedDecisions: number; // D03 auto-resolved (no API call)
   rulesDecisions: number;
   retriesTotal: number;
+  /** D13: transient HTTP failures (429/5xx/network) survived via the
+   *  client's backoff ladder — gateway path only; the Anthropic SDK
+   *  retries invisibly and reports 0 here. */
+  httpRetries: number;
   fallbacks: number;
   compactions: number;
   /** Decisions where the floor guard vetoed an over-threshold compaction —
@@ -347,6 +351,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
     forcedDecisions: 0,
     rulesDecisions: 0,
     retriesTotal: 0,
+    httpRetries: 0,
     fallbacks: 0,
     compactions: 0,
     compactionsSuppressed: 0,
@@ -911,6 +916,8 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
     record.errors.push(`host: ${String(e)}`);
   } finally {
     if (transcript) record.compactionsSuppressed = transcript.floorSuppressed;
+    if ("httpRetries" in client && typeof client.httpRetries === "number")
+      record.httpRetries = client.httpRetries;
     record.durationMs = Date.now() - startedAt;
     const totalTurns = record.turns ? record.turns.corp + record.turns.runner : 0;
     record.msPerTurn = totalTurns > 0 ? Math.round(record.durationMs / totalTurns) : null;

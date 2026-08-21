@@ -42,6 +42,7 @@ interface GameRecordLite {
   largeFusedMenus?: number;
   rulesDecisions?: number;
   retriesTotal?: number;
+  httpRetries?: number;
   fallbacks?: number;
   invalidRecords?: number;
   compactions?: number;
@@ -149,6 +150,7 @@ function gameRow(g: CorpusGame): string {
       : r.status ?? "?";
   const incidents: string[] = [];
   if (r.retriesTotal) incidents.push(`${r.retriesTotal} retries`);
+  if (r.httpRetries) incidents.push(`${r.httpRetries} http-retries`);
   if (r.fallbacks) incidents.push(`${r.fallbacks} FALLBACKS`);
   if (r.invalidRecords) incidents.push(`${r.invalidRecords} INVALID`);
   if (r.previewDivergences) incidents.push(`${r.previewDivergences} preview-div`);
