@@ -53,9 +53,9 @@ npm run llm-game -- --seed 7                  # Claude as Runner (needs ANTHROPI
                                               #   (see docs/PROMPTING.md)
 npm run audit                                 # conservation audit over golden fixtures
 npm run audit -- --file out/<game>.json       # audit any game record
-npm run format -- --file out/<game>.json      # markdown narratives: .report.md (review
-                                              #   copy, forced decisions collapsed) and
-                                              #   .full.md (every decision + options)
+npm run format -- --file out/<game>.json      # markdown narrative: .full.md (every
+                                              #   decision + options; review pairs this
+                                              #   with the replay viewer)
 npm test                                      # typecheck + determinism
 ```
 

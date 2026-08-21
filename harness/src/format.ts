@@ -128,7 +128,7 @@ function isBoilerplate(reasoning: string | null): boolean {
 export async function formatGame(
   gamePath: string,
   jsonlPath: string | null
-): Promise<{ report: string; full: string }> {
+): Promise<{ full: string }> {
   const game = JSON.parse(await readFile(gamePath, "utf-8")) as Record<string, unknown> & {
     log: string[];
   };
@@ -446,7 +446,11 @@ export async function formatGame(
     return out.join("\n") + "\n";
   };
 
-  return { report: render(false), full: render(true) };
+  // Since the D06-1 corpus revision only the FULL view is emitted — the
+  // abbreviated report view was retired (review happens in full.md + the
+  // replay viewer; the collapse machinery stays for the full view's
+  // forced-run folding).
+  return { full: render(true) };
 }
 
 // D07: debrief artifact rendered at the end of both views. Read from the
@@ -473,10 +477,9 @@ async function debriefSection(gamePath: string): Promise<string> {
 }
 
 export async function writeFormatted(gamePath: string, jsonlPath: string | null): Promise<string[]> {
-  const { report, full } = await formatGame(gamePath, jsonlPath);
+  const { full } = await formatGame(gamePath, jsonlPath);
   const stem = gamePath.replace(/\.json$/, "");
   const debrief = await debriefSection(gamePath);
-  await writeFile(`${stem}.report.md`, report + debrief);
   await writeFile(`${stem}.full.md`, full + debrief);
-  return [`${stem}.report.md`, `${stem}.full.md`];
+  return [`${stem}.full.md`];
 }
