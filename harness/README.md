@@ -26,7 +26,9 @@ npm run invariant -- --seeds 7 --corp "Thorny Grid" --runner "Trash King"
 npm run llm-game -- --model mock --seed 7     # keyless end-to-end LLM-seat game
 npm run llm-game -- --seed 7                  # Claude as Runner (needs ANTHROPIC_API_KEY;
                                               #   model via --model or HARNESS_MODEL,
-                                              #   default claude-haiku-4-5)
+                                              #   default claude-haiku-4-5;
+                                              #   openrouter/<vendor>/<slug> routes via
+                                              #   OpenRouter — needs OPENROUTER_API_KEY)
                                               # prompt knobs: --profile neutral|expert,
                                               #   --reasoning brief|extended|none
                                               # context knobs (D01): --context

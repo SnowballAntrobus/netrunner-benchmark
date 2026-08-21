@@ -138,7 +138,11 @@ if (command === "run-game") {
   process.exit(1);
 } else if (command === "llm-game") {
   const model = arg("model", process.env["HARNESS_MODEL"] ?? "claude-haiku-4-5");
-  if (model !== "mock" && !process.env["ANTHROPIC_API_KEY"]) {
+  if (model.startsWith("openrouter/") && !process.env["OPENROUTER_API_KEY"]) {
+    console.error("OPENROUTER_API_KEY not set (required for openrouter/* models)");
+    process.exit(2);
+  }
+  if (model !== "mock" && !model.startsWith("openrouter/") && !process.env["ANTHROPIC_API_KEY"]) {
     console.error("ANTHROPIC_API_KEY not set (use --model mock for the keyless path)");
     process.exit(2);
   }
@@ -199,6 +203,7 @@ if (command === "run-game") {
     `tokens in=${record.usage.tokensIn} out=${record.usage.tokensOut} ` +
     `cacheRead=${record.usage.cacheRead} cacheWrite=${record.usage.cacheWrite} ` +
     `compactions=${record.compactions} transcriptMax=${record.transcriptTokensMax}` +
+    (record.reportedCostUsd !== null ? ` reportedCost=$${record.reportedCostUsd.toFixed(4)}` : "") +
     (record.compactionsSuppressed > 0
       ? ` ⚠ compactions-suppressed=${record.compactionsSuppressed} (compact-threshold below viable floor — raise it; see PROMPTING.md)`
       : "")

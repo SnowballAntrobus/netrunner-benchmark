@@ -1,6 +1,14 @@
 # D13 — Multi-provider models via OpenRouter
 
-**Status: awaiting review** · Per Dante: the benchmark's point is
+**Status: implemented** (cohort per review: `deepseek/deepseek-v4-flash-0731`,
+`google/gemini-3.7-flash`, `qwen/qwen3.7-flash`, `openai/gpt-5.4-mini` —
+tier check: all haiku-tier or below, none sonnet-tier; gpt-5.4-mini
+($0.75/$4.50) is the closest haiku peer, gemini-3.7-flash ($0.375/$1.875)
+sits below it, deepseek-v4-flash ($0.07/$0.17) and qwen3.7-flash
+($0.03/$0.13) a full tier cheaper. Client in llm.ts via global fetch, no
+SDK dep; usage.cost accumulated to `reportedCostUsd` on the game record;
+keyless guard verified; mock ladder green. Live shakedowns pending
+OPENROUTER_API_KEY.) · Per Dante: the benchmark's point is
 cross-model comparison; plug in non-Anthropic providers through one
 gateway (OpenRouter), starting with the haiku-tier so exploratory
 games stay cheap.

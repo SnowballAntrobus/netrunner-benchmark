@@ -29,6 +29,11 @@ export interface Usage {
   tokensOut: number;
   cacheRead: number;
   cacheWrite: number;
+  /** D13: the provider-billed cost for this call in USD, when the
+   *  gateway reports it (OpenRouter `usage.cost`). Absent for direct
+   *  Anthropic and mock. Measured beats modeled: the corpus report
+   *  prefers accumulated reported cost over price-table estimates. */
+  costUsd?: number;
 }
 
 /** One conversation message. `cache: true` marks a prompt-cache breakpoint
@@ -265,8 +270,165 @@ export class MockClient implements ChoiceClient {
   }
 }
 
+// ---- OpenRouter (D13): non-Anthropic providers through one gateway --------
+// Same ChoiceClient contract — forced choose_option function call, plain
+// completion for summarize. Claude models NEVER route here (direct API
+// keeps first-party caching + billing). Decoding is provider-default and
+// no `seed` parameter is ever sent (see D13: partial determinism would
+// make within-seed variance incomparable across providers).
+
+const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
+
+interface ORMessage {
+  role: "system" | "user" | "assistant";
+  content: string;
+}
+interface ORResponse {
+  choices?: {
+    message?: {
+      content?: string | null;
+      tool_calls?: { function?: { name?: string; arguments?: string } }[];
+    };
+    finish_reason?: string;
+  }[];
+  usage?: {
+    prompt_tokens?: number;
+    completion_tokens?: number;
+    cost?: number;
+    prompt_tokens_details?: { cached_tokens?: number };
+  };
+  error?: { message?: string };
+}
+
+export class OpenRouterClient implements ChoiceClient {
+  readonly model: string; // full "openrouter/vendor/slug" — recorded as-is
+  private slug: string; // what the gateway expects
+  private key: string;
+
+  constructor(model: string) {
+    this.model = model;
+    this.slug = model.replace(/^openrouter\//, "");
+    const key = process.env["OPENROUTER_API_KEY"];
+    if (!key) throw new Error("OPENROUTER_API_KEY not set");
+    this.key = key;
+  }
+
+  private async post(body: Record<string, unknown>): Promise<ORResponse> {
+    const res = await fetch(OPENROUTER_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.key}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ ...body, model: this.slug, usage: { include: true } }),
+    });
+    const json = (await res.json()) as ORResponse;
+    if (!res.ok || json.error) {
+      throw new Error(
+        `OpenRouter ${res.status}: ${json.error?.message ?? "request failed"}`
+      );
+    }
+    return json;
+  }
+
+  private messagesFor(system: string, messages: ChatMessage[]): ORMessage[] {
+    // cache flags are Anthropic-specific; gateway providers cache
+    // implicitly (or not) on their own terms — the cached_tokens usage
+    // field records whatever they did.
+    return [
+      { role: "system", content: system },
+      ...messages.map((m) => ({ role: m.role, content: m.content })),
+    ];
+  }
+
+  private usageFrom(u: ORResponse["usage"]): Usage {
+    return {
+      tokensIn: u?.prompt_tokens ?? 0,
+      tokensOut: u?.completion_tokens ?? 0,
+      cacheRead: u?.prompt_tokens_details?.cached_tokens ?? 0,
+      cacheWrite: 0,
+      ...(typeof u?.cost === "number" ? { costUsd: u.cost } : {}),
+    };
+  }
+
+  async chooseOption(
+    system: string,
+    messages: ChatMessage[],
+    _context: ChoiceContext
+  ): Promise<ChoiceAttempt> {
+    const response = await this.post({
+      max_tokens: 1024,
+      messages: this.messagesFor(system, messages),
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "choose_option",
+            description: "Choose one legal option by index.",
+            parameters: {
+              type: "object",
+              properties: {
+                reasoning: {
+                  type: "string",
+                  description: "Your strategic reasoning, written before choosing",
+                },
+                option: { type: "integer", description: "Index of the chosen option" },
+              },
+              required: ["reasoning", "option"],
+            },
+          },
+        },
+      ],
+      tool_choice: { type: "function", function: { name: "choose_option" } },
+    });
+    const usage = this.usageFrom(response.usage);
+    const msg = response.choices?.[0]?.message;
+    const args = msg?.tool_calls?.[0]?.function?.arguments;
+    if (typeof args === "string") {
+      let input: { option?: unknown; reasoning?: unknown };
+      try {
+        input = JSON.parse(args) as { option?: unknown; reasoning?: unknown };
+      } catch {
+        return { parsed: null, raw: args, usage }; // → unparseable (D10)
+      }
+      const option =
+        typeof input.option === "number"
+          ? Math.trunc(input.option)
+          : typeof input.option === "string" && /^\s*\d+\s*$/.test(input.option)
+            ? parseInt(input.option, 10)
+            : null;
+      if (option !== null) {
+        return {
+          parsed: { option, reasoning: String(input.reasoning ?? "") },
+          raw: args,
+          usage,
+        };
+      }
+      return { parsed: null, raw: args, usage };
+    }
+    // No tool call at all — prose answer or refusal; forensics record it.
+    return { parsed: null, raw: JSON.stringify(msg ?? response), usage };
+  }
+
+  async summarize(system: string, messages: ChatMessage[]): Promise<SummaryResult> {
+    const startedAt = Date.now();
+    const response = await this.post({
+      max_tokens: 8192, // summaries are the model's whole memory — never clip
+      messages: this.messagesFor(system, messages),
+    });
+    const choice = response.choices?.[0];
+    return {
+      text: (choice?.message?.content ?? "").trim(),
+      usage: this.usageFrom(response.usage),
+      latencyMs: Date.now() - startedAt,
+      truncated: choice?.finish_reason === "length",
+    };
+  }
+}
+
 export function makeClient(model: string, seed: number, maxTokens = 1024): ChoiceClient {
   if (model === "mock") return new MockClient(seed);
+  if (model.startsWith("openrouter/")) return new OpenRouterClient(model);
   return new AnthropicClient(model, maxTokens);
 }
 
@@ -441,6 +603,9 @@ export async function decideWithRetries(
     usage.tokensOut += result.usage.tokensOut;
     usage.cacheRead += result.usage.cacheRead;
     usage.cacheWrite += result.usage.cacheWrite;
+    if (typeof result.usage.costUsd === "number") {
+      usage.costUsd = (usage.costUsd ?? 0) + result.usage.costUsd;
+    }
     promptTokens =
       result.usage.tokensIn + result.usage.cacheRead + result.usage.cacheWrite;
     lastRaw = result.raw;

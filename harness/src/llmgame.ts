@@ -190,6 +190,10 @@ export interface LLMGameRecord extends GameRecord {
    *  non-completed game, or the debrief call failed). */
   debriefPath: string | null;
   usage: Usage;
+  /** D13: accumulated provider-billed cost (OpenRouter usage.cost) in
+   *  USD; null for direct Anthropic and mock. The corpus report prefers
+   *  this over price-table estimates. */
+  reportedCostUsd: number | null;
   decisionLogPath: string;
   invalidRecords: number;
 }
@@ -351,6 +355,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
     previewDivergences: 0,
     debriefPath: null,
     usage: { tokensIn: 0, tokensOut: 0, cacheRead: 0, cacheWrite: 0 },
+    reportedCostUsd: null,
     decisionLogPath,
     invalidRecords: 0,
   };
@@ -557,6 +562,9 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
           record.usage.tokensOut += summary.usage.tokensOut;
           record.usage.cacheRead += summary.usage.cacheRead;
           record.usage.cacheWrite += summary.usage.cacheWrite;
+          if (typeof summary.usage.costUsd === "number") {
+            record.reportedCostUsd = (record.reportedCostUsd ?? 0) + summary.usage.costUsd;
+          }
           await appendRecord(JSON.stringify(compactionRecord));
         } catch (e) {
           apiAborted = true;
@@ -600,6 +608,9 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
       record.usage.tokensOut += result.usage.tokensOut;
       record.usage.cacheRead += result.usage.cacheRead;
       record.usage.cacheWrite += result.usage.cacheWrite;
+      if (typeof result.usage.costUsd === "number") {
+        record.reportedCostUsd = (record.reportedCostUsd ?? 0) + result.usage.costUsd;
+      }
       await writeDecision({
         record_type: "decision",
         game_id: gameId,
@@ -868,6 +879,9 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
         record.usage.tokensOut += result.usage.tokensOut;
         record.usage.cacheRead += result.usage.cacheRead;
         record.usage.cacheWrite += result.usage.cacheWrite;
+      if (typeof result.usage.costUsd === "number") {
+        record.reportedCostUsd = (record.reportedCostUsd ?? 0) + result.usage.costUsd;
+      }
         const debriefPath = join(runDir, "debrief.json");
         await writeFile(
           debriefPath,
