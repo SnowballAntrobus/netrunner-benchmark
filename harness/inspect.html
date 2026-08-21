@@ -15,6 +15,23 @@
 		<!-- Pristine JSON capture — as in harness.html (utility.js overrides
 		     the global JSON.stringify with a title-collapsing replacer). -->
 		<script>window.__pristineJSON = { stringify: JSON.stringify, parse: JSON.parse };</script>
+		<!-- Reserve the side panel BEFORE the engine loads: the engine sizes
+		     canvas + field layout from window.innerWidth, so overriding the
+		     getter makes it lay out natively into the space beside the
+		     panel — full resolution, no post-hoc downscaling, HUD corners
+		     on the visible canvas. documentElement.clientWidth tracks
+		     resizes and is not affected by this override. -->
+		<script>
+			(function () {
+				var PANEL_W = 410;
+				Object.defineProperty(window, "innerWidth", {
+					configurable: true,
+					get: function () {
+						return Math.max(500, document.documentElement.clientWidth - PANEL_W);
+					},
+				});
+			})();
+		</script>
 		<script src="../jquery/jquery-3.2.1.min.js"></script>
 		<script src="../cardrenderer/pixi.min.js"></script>
 		<script src="../cardrenderer/pixi-particles.min.js"></script>
@@ -75,7 +92,15 @@
 			#board-tip { position: fixed; pointer-events: none; z-index: 4500;
 				background: rgba(10,12,16,0.95); color: #eee; border: 1px solid #444;
 				border-radius: 4px; padding: 5px 9px; font: 12px -apple-system, "Segoe UI", Roboto, sans-serif;
-				max-width: 260px; }
+				max-width: 280px; white-space: pre-line; }
+			#board-tip img { display: block; width: 240px; border-radius: 10px; margin-bottom: 5px; }
+			.board-hud { position: fixed; z-index: 3999; pointer-events: none;
+				background: rgba(8,12,10,0.82); border: 1px solid #1f3a2a;
+				border-radius: 6px; padding: 4px 12px; color: #7fdc8f;
+				font: 13px ui-monospace, "SF Mono", Menlo, monospace;
+				text-shadow: 0 0 4px #000; white-space: nowrap; }
+			#hud-corp { top: 8px; right: 424px; }
+			#hud-runner { bottom: 8px; left: 8px; }
 			/* hide engine interaction chrome — the replay is view-only.
 			   NOTE: #loading must stay visible during boot — the engine's
 			   texture ticker only calls StartGame() while it shows. */
@@ -120,6 +145,8 @@
 		     (possibly downscaled) canvas — counter labels + hover tooltip. -->
 		<div id="board-labels"></div>
 		<div id="board-tip" style="display:none"></div>
+		<div id="hud-corp" class="board-hud"></div>
+		<div id="hud-runner" class="board-hud"></div>
 		<div id="replay-panel">
 			<div id="replay-title">Loading replay…</div>
 			<div id="replay-controls">

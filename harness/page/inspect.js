@@ -157,20 +157,67 @@
   var PANEL_W = 410; // #replay-panel width + border
   var hoverWired = false;
 
-  // Shrink the canvas' DISPLAYED size so the side panel never covers the
-  // board (the engine sizes canvas + stage from window.innerWidth on every
-  // field apply, so this must be re-asserted after each rebuild).
+  // The panel's width is reserved by the innerWidth override in
+  // inspect.html — the engine lays out natively into the remaining space,
+  // so no display scaling is needed. This hook just wires hover once the
+  // canvas exists.
   function applyLayout() {
     if (typeof cardRenderer === "undefined" || !cardRenderer || !cardRenderer.app) return;
-    var v = cardRenderer.app.view;
-    var availW = Math.max(400, window.innerWidth - PANEL_W);
-    var scale = Math.min(1, availW / window.innerWidth);
-    v.style.width = Math.floor(window.innerWidth * scale) + "px";
-    v.style.height = Math.floor(window.innerHeight * scale) + "px";
-    if (!hoverWired) { wireHover(v); hoverWired = true; }
+    if (!hoverWired) { wireHover(cardRenderer.app.view); hoverWired = true; }
+    // NOTE: no stage-bounds "un-clip" nudging here — an earlier attempt
+    // shifted on getBounds(), but off-screen helper sprites live at large
+    // negative coordinates and the shift pushed the runner HUD off the
+    // bottom of the canvas. The slight top-left pile clip is cosmetic.
+    renderHud();
+  }
+
+  // Review HUD: the engine's sprite counters are laid out for play, not
+  // review — two earlier rounds of scaling/regrouping them still read
+  // wrong. Hide them entirely and render two compact HTML strips from
+  // the live globals instead (re-asserted every step: the engine's
+  // UpdateCounters re-shows its sprites during rebuilds).
+  function renderHud() {
+    try {
+      if (typeof countersUI !== "undefined") {
+        for (var k in countersUI) {
+          var entry = countersUI[k];
+          if (!entry) continue;
+          ["corp", "runner"].forEach(function (side) {
+            var c = entry[side];
+            if (!c) return;
+            if (c.sprite) c.sprite.visible = false;
+            if (c.richText) c.richText.visible = false;
+          });
+        }
+      }
+      var ch = document.getElementById("hud-corp");
+      var rh = document.getElementById("hud-runner");
+      if (!ch || !rh || typeof corp === "undefined" || typeof runner === "undefined") return;
+      var corpBits = [
+        corp.creditPool + "[c]",
+        corp.clickTracker + " clicks",
+        "hand " + corp.HQ.cards.length + "/" +
+          (typeof MaxHandSize === "function" ? MaxHandSize(corp) : corp.maxHandSize),
+        "R&D " + corp.RnD.cards.length,
+      ];
+      if (corp.badPublicity > 0) corpBits.push("bad pub " + corp.badPublicity);
+      ch.textContent = "CORP   " + corpBits.join("  ·  ");
+      var runnerBits = [
+        runner.creditPool + "[c]",
+        runner.clickTracker + " clicks",
+        "grip " + runner.grip.length + "/" +
+          (typeof MaxHandSize === "function" ? MaxHandSize(runner) : runner.maxHandSize),
+        "MU " +
+          (typeof InstalledMemoryCost === "function" ? InstalledMemoryCost() : "?") + "/" +
+          (typeof MemoryUnits === "function" ? MemoryUnits() : "?"),
+        "stack " + runner.stack.length, // plain array (corp piles are {cards})
+      ];
+      if (runner.tags > 0) runnerBits.push("⚠ " + runner.tags + " tags");
+      rh.textContent = "RUNNER   " + runnerBits.join("  ·  ");
+    } catch (e) { /* HUD polish must never break the walk */ }
   }
   window.addEventListener("resize", function () {
-    setTimeout(function () { applyLayout(); updateBoardLabels(); }, 50);
+    setTimeout(function () { applyLayout(); }, 50);
   });
 
   function cssScale() {
@@ -178,65 +225,47 @@
     return v.clientWidth ? v.clientWidth / v.width : 1;
   }
 
-  // Small text labels under the engine's corner counters (credits/clicks/
-  // hand/MU/tags) — anchored to each counter's rendered position, so they
-  // survive layout scaling and hideWhenZero visibility.
-  function updateBoardLabels() {
-    var host = document.getElementById("board-labels");
-    if (!host) return;
-    host.innerHTML = "";
-    if (typeof countersUI === "undefined" || typeof cardRenderer === "undefined" || !cardRenderer.app) return;
-    var s = cssScale();
-    var defs = [
-      [countersUI.credits && countersUI.credits.corp, "credits"],
-      [countersUI.click && countersUI.click.corp, "clicks"],
-      [countersUI.hand_size && countersUI.hand_size.corp, "hand/max"],
-      [countersUI.bad_publicity && countersUI.bad_publicity.corp, "bad pub"],
-      [countersUI.credits && countersUI.credits.runner, "credits"],
-      [countersUI.click && countersUI.click.runner, "clicks"],
-      [countersUI.hand_size && countersUI.hand_size.runner, "grip/max"],
-      [countersUI.mu && countersUI.mu.runner, "MU"],
-      [countersUI.tag && countersUI.tag.runner, "tags"],
-    ];
-    // Collect anchor points first, then lay out with a two-lane collision
-    // dodge: adjacent counters sit closer than a label's width, so
-    // overlapping labels drop to a second row instead of mashing together.
-    var anchors = [];
-    for (var i = 0; i < defs.length; i++) {
-      var c = defs[i][0];
-      if (!c || !c.richText || !c.richText.visible || !c.sprite || !c.sprite.visible) continue;
-      var b;
-      try { b = c.richText.getBounds(); } catch (e) { continue; }
-      if (!b || (b.width === 0 && b.height === 0)) continue;
-      anchors.push({ x: (b.x + b.width / 2) * s, y: (b.y + b.height) * s, text: defs[i][1] });
-    }
-    anchors.sort(function (a, b) { return a.y - b.y || a.x - b.x; });
-    var lanes = []; // per lane: rightmost occupied x
-    for (var k = 0; k < anchors.length; k++) {
-      var a = anchors[k];
-      var w = a.text.length * 5.5 + 6; // ~9px font estimate
-      var lane = 0;
-      while (lanes[lane] !== undefined && a.x - w / 2 < lanes[lane] + 4 &&
-             Math.abs((lanes[lane + "_y"] || a.y) - a.y) < 22) lane++;
-      lanes[lane] = a.x + w / 2;
-      lanes[lane + "_y"] = a.y;
-      var el = document.createElement("div");
-      el.className = "board-label";
-      el.textContent = a.text;
-      el.style.left = a.x + "px";
-      el.style.top = a.y + 1 + lane * 11 + "px";
-      host.appendChild(el);
-    }
+  // Hover tooltip for HIDDEN corp cards (omniscient only): hand cards plus
+  // every unrezzed installed card (ice, root assets/upgrades) — the
+  // reviewer identifies facedown material without stepping the walk.
+  function hoverTargets() {
+    var out = [];
+    try {
+      for (var i = 0; i < corp.HQ.cards.length; i++) out.push(corp.HQ.cards[i]);
+      var servers = [corp.HQ, corp.RnD, corp.archives].concat(corp.remoteServers || []);
+      for (var s = 0; s < servers.length; s++) {
+        var ice = servers[s].ice || [];
+        for (var j = 0; j < ice.length; j++) if (!ice[j].rezzed) out.push(ice[j]);
+        var root = servers[s].root || [];
+        for (var k = 0; k < root.length; k++) if (!root[k].rezzed) out.push(root[k]);
+      }
+    } catch (e) { /* engine mid-rebuild */ }
+    return out;
   }
 
-  // Hover tooltip for corp hand cards (omniscient only): the fanned cards
-  // at the top are small and rotated — hit-test their rendered bounds and
-  // name them without zooming.
+  function tipText(c) {
+    var lines = [c.title || "?"];
+    var typeLine = (c.cardType || "") +
+      (c.subTypes && c.subTypes.length ? " · " + c.subTypes.join(", ") : "");
+    if (typeLine) lines.push(typeLine);
+    var facts = [];
+    if (typeof c.rezCost !== "undefined") facts.push("rez " + c.rezCost);
+    if (typeof c.playCost !== "undefined") facts.push("cost " + c.playCost);
+    if (typeof c.installCost !== "undefined") facts.push("install " + c.installCost);
+    if (typeof c.strength !== "undefined" && c.strength !== null) facts.push("str " + c.strength);
+    if (typeof c.advancementRequirement !== "undefined") facts.push("adv req " + c.advancementRequirement);
+    if (typeof c.agendaPoints !== "undefined") facts.push(c.agendaPoints + " AP");
+    if (typeof c.advancement === "number" && c.advancement > 0) facts.push("⚠ " + c.advancement + " advancement");
+    if (typeof c.trashCost !== "undefined") facts.push("trash " + c.trashCost);
+    if (facts.length) lines.push(facts.join(" · "));
+    return lines.join("\n");
+  }
+
   function wireHover(view) {
     var tip = document.getElementById("board-tip");
     if (!tip) return;
     view.addEventListener("mousemove", function (e) {
-      if (!omniscient || typeof corp === "undefined" || !corp.HQ) {
+      if (!omniscient) {
         tip.style.display = "none";
         return;
       }
@@ -245,23 +274,34 @@
       var px = (e.clientX - rect.left) / s;
       var py = (e.clientY - rect.top) / s;
       var hit = null;
-      for (var i = 0; i < corp.HQ.cards.length; i++) {
-        var card = corp.HQ.cards[i];
-        var r = card.renderer;
+      var targets = hoverTargets();
+      for (var i = 0; i < targets.length; i++) {
+        var r = targets[i].renderer;
         if (!r || !r.sprite) continue;
         var b;
         try { b = r.sprite.getBounds(); } catch (err) { continue; }
-        if (px >= b.x && px <= b.x + b.width && py >= b.y && py <= b.y + b.height) hit = card;
+        if (px >= b.x && px <= b.x + b.width && py >= b.y && py <= b.y + b.height) hit = targets[i];
       }
       if (hit) {
-        tip.textContent =
-          hit.title +
-          (hit.cardType ? " · " + hit.cardType : "") +
-          (typeof hit.rezCost !== "undefined" ? " · rez " + hit.rezCost : "") +
-          (typeof hit.playCost !== "undefined" ? " · cost " + hit.playCost : "");
+        // With the pack: hover reveals the UNTINTED card image itself,
+        // captioned with the state facts. Text-only fallback otherwise.
+        if (useRealArt && typeof hit.imageFile !== "undefined" &&
+            typeof ChangeImageFileToJPG === "function") {
+          tip.innerHTML = "";
+          var img = document.createElement("img");
+          img.src = "images/" + ChangeImageFileToJPG(hit.imageFile);
+          tip.appendChild(img);
+          var cap = document.createElement("div");
+          cap.textContent = tipText(hit);
+          tip.appendChild(cap);
+        } else {
+          tip.textContent = tipText(hit);
+        }
         tip.style.display = "block";
-        tip.style.left = e.clientX + 14 + "px";
-        tip.style.top = e.clientY + 14 + "px";
+        var maxX = document.documentElement.clientWidth - 300;
+        var maxY = document.documentElement.clientHeight - 420;
+        tip.style.left = Math.min(e.clientX + 14, maxX) + "px";
+        tip.style.top = Math.min(e.clientY + 14, maxY) + "px";
       } else {
         tip.style.display = "none";
       }
@@ -328,7 +368,17 @@
       var card = all[i];
       destroyRenderer(card);
       var side = card.player == corp ? "corp" : "runner";
-      var isUp = IsFaceUp(card);
+      // "Hidden" means hidden FROM THE RUNNER (the seat under study) —
+      // IsFaceUp is viewer-relative and the boot idles as a human CORP,
+      // so it wrongly counted corp hand/unrezzed installs as face-up and
+      // the hidden tint never applied. PlayerCanLook(runner, ·) is the
+      // same choke point the serializer trusts; rezzed stays a fallback
+      // for rebuilt cards whose flip state lags.
+      var isUp = card.rezzed === true;
+      if (!isUp) {
+        try { isUp = PlayerCanLook(runner, card); }
+        catch (e3) { isUp = IsFaceUp(card); }
+      }
       var banner = null;
       if (!isUp) banner = card.cardType === "ice" ? "UNREZZED" : "FACEDOWN";
       var front, backs;
@@ -341,11 +391,24 @@
         useRealArt && typeof card.imageFile !== "undefined"
           ? cardRenderer.LoadTexture("images/" + ChangeImageFileToJPG(card.imageFile))
           : null;
-      if (omniscient) {
-        front = artFront || faceTexture(card, null);
-        backs = { back: faceTexture(card, banner || "FACEDOWN"), known: backTextures(side).known };
+      front = artFront || faceTexture(card, null);
+      var hiddenArtTint = false;
+      if (isUp) {
+        // Publicly visible: whichever texture the renderer elects to
+        // draw (rebuilt cards' flip state is unreliable), show the face.
+        backs = { back: front, known: backTextures(side).known };
+      } else if (omniscient) {
+        if (artFront) {
+          // Hidden cards show their real art DIMMED (tint applied after
+          // CreateCard) — hidden-state reads as a shade, and hover shows
+          // the untinted card. Without the image pack, the schematic
+          // banner face remains the fallback.
+          backs = { back: artFront, known: backTextures(side).known };
+          hiddenArtTint = true;
+        } else {
+          backs = { back: faceTexture(card, banner || "FACEDOWN"), known: backTextures(side).known };
+        }
       } else {
-        front = artFront || faceTexture(card, null);
         backs = backTextures(side);
       }
       var costTexture = null;
@@ -360,6 +423,22 @@
           strengthInfo = { texture: strengthTextures.ib, num: card.strength, ice: false, cost: costTexture };
       }
       card.renderer = cardRenderer.CreateCard(card, front, backs, glowTextures, strengthInfo);
+      if (hiddenArtTint && card.renderer && card.renderer.sprite) {
+        // Dim via an overlay CHILD, not sprite.tint: the engine's render
+        // path calls Tint() on every card every frame (TintIfFaceDown,
+        // init.js) and stomps any tint we set. Children keep their own
+        // tint/alpha and inherit the parent's scale, rotation, and mask,
+        // so the shade tracks the card exactly.
+        try {
+          var shade = new PIXI.Sprite(PIXI.Texture.WHITE);
+          shade.tint = 0x0a141e;
+          shade.alpha = 0.45;
+          shade.anchor.set(0.5, 0.5);
+          shade.width = 300;
+          shade.height = 419;
+          card.renderer.sprite.addChild(shade);
+        } catch (e4) { /* shade is cosmetic */ }
+      }
       for (var j = 0; j < counterList.length; j++) {
         if (typeof card[counterList[j]] === "number" && card[counterList[j]] > 0) {
           myCounters.push(
@@ -436,7 +515,16 @@
     var primary = o.command || o.label || o.button || card.title ||
       (card.hidden ? "(hidden card)" : null) || o.text || ("option " + o.index);
     var bits = [primary];
+    // Fused entries: show the subject beside the verb ("run Archives",
+    // "play Jailbreak"), and any committed second step ("→ then: R&D").
+    if (o.command && (o.label || card.title) && primary === o.command) {
+      bits.push(o.label || card.title);
+    }
     if (o.server && !o.label) bits.push("→ " + o.server);
+    if (o.then) {
+      bits.push("→ then: " + (o.then.label || o.then.server ||
+        (o.then.card && o.then.card.title) || stringify(o.then)));
+    }
     if (o.description && primary !== o.description) bits.push("— " + o.description);
     return bits.join(" ");
   }
@@ -486,26 +574,16 @@
     if (r.transcript_tokens) badges.appendChild(el("span", "rp-badge", "ctx " + Math.round(r.transcript_tokens / 1000) + "K"));
     body.appendChild(badges);
 
-    var opts = el("div", "rp-section");
-    for (var i = 0; i < (r.options || []).length; i++) {
-      var o = r.options[i];
-      var d = el("div", "rp-opt" + (i === r.choice ? " chosen" : ""),
-        (i === r.choice ? "✔ " : "") + i + ": " + optionLabel(o));
-      if (o.choices && o.choices.length) {
-        d.appendChild(el("div", "rp-choices", "→ " + o.choices.map(optionLabel).join(" | ")));
-      }
-      opts.appendChild(d);
-    }
-    body.appendChild(opts);
-
-    if (r.reasoning) {
-      body.appendChild(el("div", "rp-reason", r.reasoning));
-    } else if (r.forced) {
-      body.appendChild(el("div", "rp-dim", "Auto-resolved: single legal option; the model was not consulted."));
-    }
-
-    // run context the board can't show (from the record's own state)
+    // Reading order (review flow): what just happened (log tail, run
+    // context), what the model thought (reasoning), THEN the menu and
+    // the choice it made.
     var st = r.state || {};
+    if (st.log && st.log.length) {
+      var lg = el("div", "rp-section rp-dim");
+      lg.appendChild(el("div", "rp-head", "Log tail"));
+      st.log.slice(-6).forEach(function (line) { lg.appendChild(el("div", null, line)); });
+      body.appendChild(lg);
+    }
     if (st.run) {
       var run = st.run;
       var runLine = "RUN on " + run.server +
@@ -516,12 +594,26 @@
       rc.appendChild(el("span", "rp-badge warn", runLine));
       body.appendChild(rc);
     }
-    if (st.log && st.log.length) {
-      var lg = el("div", "rp-section rp-dim");
-      lg.appendChild(el("div", "rp-head", "Log tail"));
-      st.log.slice(-6).forEach(function (line) { lg.appendChild(el("div", null, line)); });
-      body.appendChild(lg);
+
+    if (r.reasoning) {
+      body.appendChild(el("div", "rp-reason", r.reasoning));
+    } else if (r.forced) {
+      body.appendChild(el("div", "rp-dim", "Auto-resolved: single legal option; the model was not consulted."));
     }
+
+    var opts = el("div", "rp-section");
+    for (var i = 0; i < (r.options || []).length; i++) {
+      var o = r.options[i];
+      var d = el("div", "rp-opt" + (i === r.choice ? " chosen" : ""),
+        (i === r.choice ? "✔ " : "") + i + ": " + optionLabel(o));
+      // Hover: the EXACT option entry the model saw, verbatim JSON.
+      try { d.title = window.__pristineJSON.stringify(o, null, 1); } catch (e2) {}
+      if (o.choices && o.choices.length) {
+        d.appendChild(el("div", "rp-choices", "→ " + o.choices.map(optionLabel).join(" | ")));
+      }
+      opts.appendChild(d);
+    }
+    body.appendChild(opts);
   }
 
   function renderStep(i) {
@@ -551,7 +643,6 @@
       "step " + (current + 1) + " / " + steps.length +
       (rcStep ? " · board @ seq " + rcStep.rec.seq : "");
     applyLayout();
-    updateBoardLabels();
     window.__inspectReady = true;
   }
   window.__replayGoto = renderStep; // CLI / headless driving
@@ -592,8 +683,13 @@
   // jump-to-turn still reach every step; only Prev/Next/arrows skip.
   function isAutoResolved(step) {
     var r = step.rec;
-    return !!r && r.record_type !== "compaction" &&
-      (r.forced === true || r.compound_fulfilled === true);
+    if (!r || r.record_type === "compaction") return false;
+    if (r.forced === true || r.compound_fulfilled === true || r.order_folded === true) return true;
+    // Corp rules-AI records are never marked "forced" — but a one-option
+    // corp decision is the same ceremony. Multi-option corp decisions
+    // (real rules-AI choices) still show.
+    if (r.seat === "corp" && r.options && r.options.length === 1) return true;
+    return false;
   }
   function move(dir) {
     var i = current + dir;
