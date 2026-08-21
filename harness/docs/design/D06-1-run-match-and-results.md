@@ -1,140 +1,110 @@
-# D06 §1 — `run-match`: batching, results table, price table
+# D06 §1 rev 2 — The corpus: durable data, progressive report, then batching
 
-**Status: awaiting review** · Split out of D06 per review: batching
-machinery is designed only now that a single-game pipeline (games 2–3,
-D01–D10) has been shaken down. D06 §2 (inspect) is **superseded by D08**
-— the replay viewer does everything inspect proposed and more, so §2
-will not be built. This document is the whole of what remains of D06.
+**Status: revised per review — awaiting re-review** · Original scope
+(match runner first) inverted by Dante's directive: every run costs
+money, so analysis must be CUMULATIVE over everything already in
+`out/`, with the data itself versioned on GitHub and a report that
+updates as games accumulate — and that names the holes where the next
+dollar should go. The match runner (§4) survives as the M5 vehicle but
+builds on the corpus machinery instead of preceding it.
 
-## Purpose
+## §1 The era taxonomy (what is comparable to what)
 
-The M5 acceptance line is "10 complete games, zero crashes, results
-table, at least one moment inspected visually." D08 satisfies the last
-clause; this design is the vehicle for the first three. Beyond M5, this
-is the shape every Phase-2 experiment takes: N games per configuration,
-one table per configuration, tables compared across arms.
+Games are comparable only within an interface era. The corpus so far:
 
-## CLI
+| era | stack | games | disposition |
+|---|---|---|---|
+| 0 | stateless, pre-D01, schema-degraded records (stringify override) | game 1 (`…026568900`), old mock (`…026098553`) | **archive** — historically reviewed (GAME1_REVIEW), not comparable, schema broken |
+| 1 | conversational + D02–D07, split actions | game 2 (`…391370459`) | keep — the split-arm reference game |
+| 2 | compound D09-1 | games 3–4 (haiku), sonnet ×2, opus 1, killed sonnet run (jsonl only) | keep — reviewed era; killed run kept for the thrash/12-turn evidence |
+| 3 | **compound D09-2 (current)** | haiku (`…421853374`), sonnet (`…421978797`), opus 2 (`…422381592`) | the growing comparable corpus — all new runs land here until the next interface change |
 
-```sh
-tsx src/cli.ts run-match --games N [--seed S] [--label NAME] [every llm-game knob]
-```
+"Archive" = moved out of the corpus dirs (kept in `_to_delete/` for
+Dante's final call), never silently deleted. The era of a game is
+DERIVED from its record fields (presence of `record_type`,
+`compound`, `order_folded`, `actions`, `contextMode`) — no manual
+tagging, so the report can never mislabel a run.
 
-- Runs N **sequential** `runLLMGame`s on seeds `S..S+N-1` (default
-  S=1). Sequential, not parallel: per-game determinism doesn't require
-  it, but API rate limits, the shared out-dir write pattern, and
-  debuggability all favor one game at a time. Parallelism is a Phase-2
-  option if wall-clock ever matters.
-- Every `llm-game` knob passes through unchanged (`--model`,
-  `--actions`, `--context`, `--compact-threshold`, ...) and applies to
-  ALL games in the match — a match is one point in config space,
-  sampled N times. Comparing configurations = comparing matches.
-- `--progress` is forwarded per game; `--watch` is refused with a
-  message (N tail terminals is a mistake nobody wants).
-
-## Match identity and layout
+## §2 Data on GitHub
 
 ```
-out/match-<label>/
-  match.json          # config + per-game row data (machine-readable)
-  match-summary.md    # the results table (human-readable)
-  <gameId>.json       # per-game artifacts, exactly as llm-game writes
-  <gameId>.jsonl      #   them today — format/audit/replay all work
-  <gameId>-debrief.json
-  <gameId>-system-prompt.txt
+harness/data/
+  games/<game_id>.json           # game record
+  games/<game_id>.jsonl          # decision log
+  games/<game_id>-debrief.json   # when present
+  games/<game_id>-system-prompt.txt
+  CORPUS.md                      # the progressive report (§3)
 ```
 
-- `--label` names the match directory. Default:
-  `s<S>x<N>-<model-short>-<epochms>` (e.g. `s1x10-haiku45-17864...`).
-  This revives the label question D06 killed for single games, at the
-  level where it is natural: a MATCH is an experiment run, the config
-  is fixed within it, and the epoch suffix guarantees uniqueness. The
-  label is a directory name, not an analysis key — `match.json` carries
-  the full config for that.
-- Per-game artifacts are unchanged and self-contained, so every
-  existing tool (`format`, `audit --file`, `replay --file`, jq
-  recipes) works on match games with no changes.
+- `harness/out/` stays scratch (gitignored); `harness/data/` is
+  tracked. Total current corpus ≈ 25MB of JSONL — plain git, no LFS.
+- Promotion is explicit: `npx tsx src/cli.ts corpus --promote
+  out/<game>.json` copies the game's artifact set into `data/games/`
+  (refusing incomplete sets unless `--partial`, for the killed-run
+  class) and regenerates CORPUS.md. Nothing lands in the corpus as a
+  side effect of running a game — a bad run never pollutes the data.
+- full.md narratives are NOT promoted (regenerable from the data:
+  `format --file data/games/<id>.json`). The abbreviated report.md
+  view is retired entirely (removed from format.ts — review practice
+  settled on full.md + the replay viewer).
 
-## Failure semantics
+## §3 The progressive report — `corpus --report` → `data/CORPUS.md`
 
-A crashed/stalled/timeout game is a **row, not an abort**: the match
-continues with the next seed, the row records the status, and
-`match.json` is rewritten after every game (an interrupted match is
-readable up to its last completed game). "Zero crashes" is checked by
-reading the table, not by the process surviving. A game that throws
-before producing a record at all (browser launch failure, config
-error) is also a row: status `failed`, error text captured, remaining
-games still run.
+Regenerated from `data/games/*` on every promote (or standalone).
+Committed with the data, so its history IS the benchmark's history.
 
-## Results table (`match-summary.md`)
+1. **Current-era results table** — one row per era-3 game: model,
+   seed, config knobs, outcome (winner/reason/AP/turns), decision
+   split (API/forced/fulfilled/folded), incidents (retries, fallbacks,
+   invalid, divergences, suppressed/truncated compactions, large
+   menus), est. $ (prices.ts), duration.
+2. **Per-model aggregates** (era 3 only): games, runner win rate with
+   n, flatline rate, mean turns survived, mean API decisions, mean $.
+   With n this small the table prints n everywhere and no standard
+   errors — honesty over dressing.
+3. **Prior-era appendix**: same table per era, collapsed, labeled
+   non-comparable.
+4. **Machinery health rollup**: any nonzero incident anywhere in the
+   corpus, linked by game id + seq.
+5. **Coverage holes** — the "where should the next dollar go" section,
+   computed, not curated: the model × seed matrix (today: everything
+   is seed 7); arms with zero current-era games (split, stateless,
+   lean history); per-cell n < 3 for any variance claim; models with
+   no long-horizon game (compaction never exercised); decks (single
+   matchup so far); missing debriefs.
+6. **Compaction-summary appendix**: each game's summaries quoted —
+   the strategy-memo record.
 
-One row per game:
+## §4 `run-match` (unchanged semantics, demoted to follow the corpus)
 
-| game | seed | status | winner | reason | turns | AP | API dec. | forced | fulfilled | retries/fb | tokens in/out/cacheR | est. $ | compactions | max ctx | prev.div. | min |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+As previously designed — N sequential seeds, one config, crash = row
+not abort, `--label`, watch refused — with one change: on completion
+each game is OFFERED for promotion (`--promote-all` flag) rather than
+auto-promoted. The M5 10-game run (D12) uses this. The
+system-prompt-cache observation stands: back-to-back same-config games
+reuse the system-prompt cache entry within the 5-minute TTL
+(~$0.19/game at opus rates, free from sequential design).
 
-All columns except `est. $` read directly from `LLMGameRecord` fields
-that already exist (D09/D10 added `compoundFulfilled` and the retry
-detail; nothing new is recorded). `min` is wall-clock minutes.
+## Pricing
 
-Aggregate block under the table:
-
-- games completed / crashed / stalled (the zero-crashes check, explicit)
-- runner win rate over COMPLETED games (with the n it's computed from)
-- flatline rate vs decked/AP-loss breakdown (reason histogram)
-- means: turns, API decisions, forced, fulfilled, retries per API
-  decision, compactions, transcript max
-- totals: tokens in/out/cache-read, estimated $ for the match
-- preview divergences total (with seq pointers into the offending
-  games, carried from each game's record)
-
-No decision-quality metrics — that whole axis stays in Phase 2 per the
-D10 scope ruling. This table is accounting, not evaluation.
-
-## Price table (`src/prices.ts`)
-
-```ts
-/** $/MTok. AS OF 2026-08-10 — verify against
- *  https://docs.claude.com/en/docs/about-claude/pricing before relying
- *  on the $ column for reporting. */
-export const PRICES: { prefix: string; in: number; out: number;
-                       cacheRead: number; cacheWrite: number }[] = [
-  { prefix: "claude-haiku-4-5",  in: 1.00, out: 5.00, cacheRead: 0.10, cacheWrite: 1.25 },
-  { prefix: "claude-sonnet-5",   in: 2.00, out: 10.00, cacheRead: 0.20, cacheWrite: 2.50 },
-  // sonnet-5 note: promotional rate through 2026-08-31; standard 3/15
-];
-```
-
-- Longest-prefix match on the model id. Unknown model (including
-  `mock`) → tokens shown, `est. $` dashed — **never guessed**.
-- 5-minute cache-write rate (the API default our client uses). If we
-  ever switch to 1-hour TTL the constant changes with the client, in
-  one place.
-- Estimated, and labeled as such in the table header: computed from
-  our recorded usage fields, not from the billing console. The as-of
-  date prints in the summary footer so a stale table is self-evident.
-
-## Interaction with the acceptance ladder
-
-`run-match --games 3 --model mock --seed 3 --compact-threshold 40000`
-becomes a CI-runnable smoke for the batching layer itself (3/3
-completed, table produced, $ dashed for mock, aggregates arithmetic
-spot-checkable). The existing single-game mock gate is untouched — it
-checks the pipeline, this checks the aggregator.
+`src/prices.ts` as designed (as-of dated, longest-prefix, dashes for
+unknown). For OpenRouter models (D13) the report prefers the
+PROVIDER-REPORTED per-call cost recorded in the game record over any
+local table.
 
 ## Acceptance
 
-- Mock match (3 games): 3/3 rows, statuses correct, table renders,
-  aggregates match hand-computation, $ dashed.
-- Injected-failure behavior: kill one game mid-match (or run a seed
-  known to stall under a tiny timeout) → that row shows the status,
-  the other games complete, aggregates count only completed games.
-- Real match is M5 itself: `run-match --games 10 --seed 1 --model
-  claude-haiku-4-5` — the 10-game run IS the first real match.
-- Full suite green; no changes to any per-game artifact.
+- `corpus --promote` on the three era-3 games + `--report`: CORPUS.md
+  renders all six sections; era derivation matches the table above;
+  totals reconcile with the game records; holes section flags at
+  minimum: single seed, no split/stateless era-3 arms, n=1 per model.
+- Promote refuses a half-missing artifact set without `--partial`.
+- Repo: `out/` gitignored, `data/` tracked, CORPUS.md committed.
+- Existing tools (format, audit, replay) work unchanged against
+  `data/games/` paths.
 
 ## Non-goals
 
-Parallel execution, cross-match comparison tooling (Phase 2 reads
-multiple match.json files; nothing here needs to anticipate it),
-per-decision metrics, cost tracking against the real billing API.
+Decision-quality metrics (Phase 2), cross-era statistical comparison,
+auto-promotion, dashboards (CORPUS.md is markdown in the repo; a D08
+graphical analog can come later if reviewing outgrows it).
