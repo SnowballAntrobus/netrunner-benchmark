@@ -20,6 +20,11 @@ implements model-written compaction), risk arithmetic ("can this access
 flatline me?"), and in-context learning within a single game. The
 rules-based corp AI provides a deterministic, reproducible opponent.
 
+Netrunner is also, in practical terms, novel to these models: unlike
+chess or Go there is no sizable public corpus of played games to learn
+from, so strong play cannot be retrieved from training data — it has to
+be produced in context, from the rules and the board at hand.
+
 ## Architecture
 
 ```
@@ -85,12 +90,29 @@ it.
 | `harness/docs/*_REVIEW.md` | per-game qualitative reviews with adjudicated findings |
 | [`UPSTREAM_README.md`](UPSTREAM_README.md) | the original fork README — engine features, debug guide, test-field/AI-preference reference |
 
-## Status
+## Status (August 2026)
 
-Phase 1 (single-game pipeline) is nearly complete: conversational
-context with model-written compaction, compound action menus, retry
-forensics, postgame debrief instrument, replay viewer, and audit
-tooling. Next: batch runner and the 10-game acceptance experiment.
+**The harness is complete; results are preliminary.** Phase 1
+delivered the full single-game pipeline: conversational context with
+model-written compaction, compound action menus, retry forensics, the
+postgame debrief instrument, graphical replay, audit self-tests,
+multi-provider support, and cumulative corpus reporting
+([`harness/data/CORPUS.md`](harness/data/CORPUS.md)) that tracks its
+own coverage holes — a handful of games so far, one seed, one matchup.
+
+Alongside the engineering, a substantial share of the work is
+qualitative: manually reviewing full game transcripts to adjudicate
+findings and identify robust comparison points between models
+(`harness/docs/*_REVIEW.md`); reviews feed finding-response designs
+back into the harness before results are trusted. Next: the 10-game
+acceptance run (D12) and the ablation arms that justify the default
+configuration.
+
+A design bias throughout: economical to run without weakening what is
+measured. Single-option decisions auto-resolve and menus fuse
+multi-step actions to cut token cost, while the honest-interface
+invariant above keeps the seat fair — the model always sees exactly
+the engine's legal options, neutrally described.
 
 ## Credits and legal
 
