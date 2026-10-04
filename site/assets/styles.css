@@ -95,13 +95,14 @@ tbody th { font-weight: 500; }
 
 /* method figure + facts */
 .diagram { width: 100%; max-width: 64rem; }
-.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr)); gap: 1rem; margin: 1.5rem 0 0; padding: 0; list-style: none; }
+.facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; margin: 1.5rem 0 2rem; padding: 0; list-style: none; }
 .facts li { padding: 1rem 1.1rem; border-radius: .5rem; background: var(--color-panel); }
 .facts b { display: block; color: #172334; margin-bottom: .2rem; }
 .callout { max-width: 82ch; padding: 1rem 1.2rem; border-left: 3px solid var(--accent); background: #fbf6ec; border-radius: 0 .4rem .4rem 0; }
 
 @media (max-width: 600px) {
   .page-header, main { width: calc(100% - 2rem); }
+  .facts { grid-template-columns: 1fr; }
   section { padding-top: 2.5rem; }
   section + section { margin-top: 2.5rem; }
   figure { margin-top: 2rem; }
