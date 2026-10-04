@@ -6,6 +6,7 @@ import { chromium, type Browser } from "playwright";
 import { existsSync } from "node:fs";
 import { startServer } from "./server.js";
 import { loadPrecon, encodeDeckParam } from "./precons.js";
+import { requiredSets, setsParam } from "./cardpool.js";
 
 export interface GameOptions {
   repoRoot: string;
@@ -21,6 +22,8 @@ export interface GameRecord {
   seed: number;
   corpPrecon: string;
   runnerPrecon: string;
+  /** D16: card sets loaded beyond the base pool (absent = base pool). */
+  cardSets?: string[];
   status: "completed" | "timeout" | "stalled" | "crashed";
   winner: "corp" | "runner" | null;
   reason: string | null;
@@ -81,6 +84,7 @@ export async function runGame(options: GameOptions, browser?: Browser): Promise<
     loadPrecon(repoRoot, corpPrecon),
     loadPrecon(repoRoot, runnerPrecon),
   ]);
+  const cardSets = await requiredSets(repoRoot, [corpDeck, runnerDeck]);
 
   const staticServer = await startServer(repoRoot);
   const ownBrowser = browser === undefined;
@@ -104,11 +108,13 @@ export async function runGame(options: GameOptions, browser?: Browser): Promise<
     errors: [],
     log: [],
   };
+  if (cardSets.length > 0) record.cardSets = cardSets;
 
   try {
     const url =
       `http://127.0.0.1:${staticServer.port}/harness.html` +
       `?faceoff=1&p=r&seed=${seed}` +
+      setsParam(cardSets) +
       `&c=${encodeDeckParam(corpDeck)}&r=${encodeDeckParam(runnerDeck)}` +
       (options.extraParams ?? "");
     await page.goto(url, { waitUntil: "load" });

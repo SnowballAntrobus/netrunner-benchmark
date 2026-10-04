@@ -2,7 +2,8 @@
 <!-- Harness entry point: minimal engine loadout for headless AI-vs-AI games.
      Modeled on engine_text.html (text mode, no PHP). Engine files are loaded
      as-is; all harness behavior lives in harness/page/bootstrap.js.
-     URL params: faceoff=1&p=r&r=<lz-deck>&c=<lz-deck>&seed=<int> -->
+     URL params: faceoff=1&p=r&r=<lz-deck>&c=<lz-deck>&seed=<int>[&sets=a,b]
+     [&llm=runner|corp|both] -->
 <html>
 	<head>
 		<meta charset="utf-8">
@@ -39,6 +40,20 @@
 		<script src="utility.js"></script>
 		<script src="sets/systemgateway.js"></script>
 		<script src="sets/systemupdate2021.js"></script>
+		<!-- Card pool (D16): extra set files on demand, &sets=elevation,...
+		     (harness/src/cardpool.ts derives the list from the decks).
+		     document.write keeps parser order: they run right here, after
+		     the base sets. Base-pool games pass no param — unchanged. -->
+		<script>
+			(function () {
+				var sets = new URLSearchParams(window.location.search).get("sets");
+				if (!sets) return;
+				sets.split(",").forEach(function (name) {
+					if (/^[a-z0-9]+$/.test(name))
+						document.write('<script src="sets/' + name + '.js"><\/script>');
+				});
+			})();
+		</script>
 		<script src="sets/tutorial.js"></script>
 		<script src="decks.js"></script>
 		<script src="runcalculator.js"></script>
@@ -83,7 +98,7 @@
 		<script src="harness/page/bootstrap.js"></script>
 		<!-- Honest state serializer + no-cheating invariant (PHASE1 M3). -->
 		<script src="harness/page/serializer.js"></script>
-		<!-- LLM seat control, active only with &llm=runner (PHASE1 M4). -->
+		<!-- LLM seat control, active with &llm=runner|corp|both (PHASE1 M4, D14). -->
 		<script src="harness/page/llmplayer.js"></script>
 	</body>
 </html>

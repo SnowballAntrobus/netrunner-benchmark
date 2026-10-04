@@ -27,7 +27,9 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { launchBrowser, runGame, type GameRecord } from "./game.js";
 import { golden } from "./golden.js";
-import { runLLMGame } from "./llmgame.js";
+import { runLLMGame, llmSeatsOf, type SeatMode } from "./llmgame.js";
+import type { Seat } from "./prompts.js";
+import { startLiveViewer } from "./live.js";
 import { fetchRules } from "./rules.js";
 import { auditGolden, auditFile, reportAudit } from "./audit.js";
 import { writeFormatted } from "./format.js";
@@ -172,14 +174,28 @@ if (command === "run-game") {
   }
   process.exit(1);
 } else if (command === "llm-game") {
-  const model = arg("model", process.env["HARNESS_MODEL"] ?? "claude-haiku-4-5");
-  if (model.startsWith("openrouter/") && !process.env["OPENROUTER_API_KEY"]) {
-    console.error("OPENROUTER_API_KEY not set (required for openrouter/* models)");
+  // D14: --seat runner (default) | corp | both. --model sets the model for
+  // a single seat (and both seats unless --corp-model/--runner-model).
+  const seatArg = arg("seat", "runner");
+  if (!["runner", "corp", "both"].includes(seatArg)) {
+    console.error(`--seat must be runner, corp or both (got ${seatArg})`);
     process.exit(2);
   }
-  if (model !== "mock" && !model.startsWith("openrouter/") && !process.env["ANTHROPIC_API_KEY"]) {
-    console.error("ANTHROPIC_API_KEY not set (use --model mock for the keyless path)");
-    process.exit(2);
+  const seatMode = seatArg as SeatMode;
+  const model = arg("model", process.env["HARNESS_MODEL"] ?? "claude-haiku-4-5");
+  const seatModels: Partial<Record<Seat, string>> = {};
+  for (const seat of llmSeatsOf(seatMode)) {
+    seatModels[seat] = arg(`${seat}-model`, model);
+  }
+  for (const m of Object.values(seatModels)) {
+    if (m.startsWith("openrouter/") && !process.env["OPENROUTER_API_KEY"]) {
+      console.error("OPENROUTER_API_KEY not set (required for openrouter/* models)");
+      process.exit(2);
+    }
+    if (m !== "mock" && !m.startsWith("openrouter/") && !process.env["ANTHROPIC_API_KEY"]) {
+      console.error("ANTHROPIC_API_KEY not set (use --model mock for the keyless path)");
+      process.exit(2);
+    }
   }
   const rulesSource = arg("rules", "official") === "digest" ? "digest" as const : "official" as const;
   const reasoningArg = arg("reasoning", "brief");
@@ -192,85 +208,118 @@ if (command === "run-game") {
       ? "stateless" as const
       : "conversational" as const;
   const historyVariant = arg("history", "full") === "lean" ? "lean" as const : "full" as const;
+  // Per-model knob, longest-prefix matched against THRESHOLD_DEFAULTS
+  // above, per seat (two-model games get each model's own default).
+  // 150K suits 200K-window models (haiku, sonnet). Opus (1M window)
+  // defaults to 300K: measured on the opus D09-2 game, 150K produced 7
+  // compactions with epochs decaying to ~7-10 API decisions (fused menus
+  // fatten each message, raising the kept-window floor) and cost ~$19.80
+  // vs ~$12.20 pre-fusion — the threshold must clear the floor with real
+  // headroom. The D13 cohort (windows 400K-1M; token counts are each
+  // provider's own tokenizer, so the observed-size comparison is
+  // like-for-like per provider) also defaults to 300K — 75% of the
+  // smallest cohort window, and inside the effective-context comfort band
+  // for the 1M ones. Mistral models are the exception: 262K windows, so
+  // the same ~75% ratio gives 200K (a 300K threshold would blow the
+  // window before compaction fired). An explicit --compact-threshold
+  // applies to every seat. See PROMPTING.md "Choosing the threshold".
+  const explicitThreshold = arg("compact-threshold", "");
+  const compactionThresholds: Partial<Record<Seat, number>> = {};
+  for (const [seat, m] of Object.entries(seatModels) as [Seat, string][]) {
+    compactionThresholds[seat] = parseInt(explicitThreshold || defaultCompactThreshold(m), 10);
+  }
+  const live = boolArg("live");
+  const liveViewer = live ? await startLiveViewer(repoRoot) : null;
   const record = await runLLMGame({
     repoRoot,
     seed,
     corpPrecon,
     runnerPrecon,
+    seat: seatMode,
     model,
+    corpModel: seatModels.corp,
+    runnerModel: seatModels.runner,
     rulesSource,
     profile: arg("profile", "neutral"),
     reasoningStyle,
     contextMode,
     historyVariant,
-    // Per-model knob, longest-prefix matched against THRESHOLD_DEFAULTS
-    // below. 150K suits 200K-window models (haiku, sonnet). Opus
-    // (1M window) defaults to 300K: measured on the opus D09-2 game,
-    // 150K produced 7 compactions with epochs decaying to ~7-10 API
-    // decisions (fused menus fatten each message, raising the kept-window
-    // floor) and cost ~$19.80 vs ~$12.20 pre-fusion — the threshold must
-    // clear the floor with real headroom. The D13 cohort (windows
-    // 400K-1M; token counts are each provider's own tokenizer, so the
-    // observed-size comparison is like-for-like per provider) also
-    // defaults to 300K — 75% of the smallest cohort window, and inside
-    // the effective-context comfort band for the 1M ones. Mistral models
-    // are the exception: 262K windows, so the same ~75% ratio gives 200K
-    // (a 300K threshold would blow the window before compaction fired).
-    // Explicit flag always wins. See PROMPTING.md "Choosing the threshold".
-    compactionThreshold: parseInt(
-      arg("compact-threshold", defaultCompactThreshold(model)),
-      10
-    ),
+    compactionThresholds,
     compactionKeepTurns: parseInt(arg("compact-keep", "20"), 10),
     autoResolve: arg("auto-resolve", "on") !== "off",
     debrief: arg("debrief", "on") !== "off",
     actions: arg("actions", "compound") === "split" ? "split" as const : "compound" as const,
+    aiBranches: arg("ai-branches", "neutral") === "rules" ? "rules" as const : "neutral" as const,
+    frames: arg("frames", "on") !== "off",
+    extraParams: boolArg("invariant") ? "&invariant=1" : "",
     progress: boolArg("progress"),
     watch: boolArg("watch"),
     outDir,
+    ...(liveViewer ? { onEvent: liveViewer.push } : {}),
   });
   console.log(summarize(record));
   console.log(
-    `model=${record.model} rules=${record.rulesSource} profile=${record.promptProfile}/` +
-    `${record.reasoningStyle} context=${record.contextMode}` +
+    `seats=${record.llmSeat} model=${record.model} rules=${record.rulesSource} ` +
+    `profile=${record.promptProfile}/${record.reasoningStyle} context=${record.contextMode}` +
     (record.historyVariant ? `/${record.historyVariant}` : "") +
     ` autoResolve=${record.autoResolve ? "on" : "off"} actions=${record.actions}` +
-    ` llmDecisions=${record.llmDecisions} forced=${record.forcedDecisions} ` +
-    `fulfilled=${record.compoundFulfilled} folded=${record.orderFolded} ` +
-    (record.largeFusedMenus > 0 ? `⚠ largeMenus=${record.largeFusedMenus} ` : "") +
-    `rulesDecisions=${record.rulesDecisions} retries=${record.retriesTotal} ` +
-    `fallbacks=${record.fallbacks} invalidRecords=${record.invalidRecords}`
+    ` aiBranches=${record.aiBranches}` +
+    (record.cardSets.length ? ` sets=${record.cardSets.join(",")}` : "")
   );
+  for (const stats of Object.values(record.seats)) {
+    console.log(
+      `[${stats.seat}] model=${stats.model} llmDecisions=${stats.llmDecisions} ` +
+      `forced=${stats.forcedDecisions} fulfilled=${stats.compoundFulfilled} ` +
+      `folded=${stats.orderFolded} multiSelectSteps=${stats.multiSelectSteps} ` +
+      (stats.largeFusedMenus > 0 ? `⚠ largeMenus=${stats.largeFusedMenus} ` : "") +
+      `retries=${stats.retriesTotal} fallbacks=${stats.fallbacks} ` +
+      `tokens in=${stats.usage.tokensIn} out=${stats.usage.tokensOut} ` +
+      `cacheRead=${stats.usage.cacheRead} cacheWrite=${stats.usage.cacheWrite} ` +
+      `compactions=${stats.compactions} transcriptMax=${stats.transcriptTokensMax}` +
+      (stats.reportedCostUsd !== null ? ` reportedCost=$${stats.reportedCostUsd.toFixed(4)}` : "") +
+      (stats.compactionsSuppressed > 0
+        ? ` ⚠ compactions-suppressed=${stats.compactionsSuppressed} (compact-threshold below viable floor — raise it; see PROMPTING.md)`
+        : "")
+    );
+  }
   console.log(
-    `tokens in=${record.usage.tokensIn} out=${record.usage.tokensOut} ` +
-    `cacheRead=${record.usage.cacheRead} cacheWrite=${record.usage.cacheWrite} ` +
-    `compactions=${record.compactions} transcriptMax=${record.transcriptTokensMax}` +
-    (record.reportedCostUsd !== null ? ` reportedCost=$${record.reportedCostUsd.toFixed(4)}` : "") +
-    (record.compactionsSuppressed > 0
-      ? ` ⚠ compactions-suppressed=${record.compactionsSuppressed} (compact-threshold below viable floor — raise it; see PROMPTING.md)`
-      : "")
+    `rulesDecisions=${record.rulesDecisions} invalidRecords=${record.invalidRecords} ` +
+    `multiSelects=${record.multiSelects} neutralizedReads=${record.neutralizedReads}`
   );
   console.log(
     `previews followed=${record.previewChecks} diverged=${record.previewDivergences}` +
     (record.previewDivergences > 0 ? "  <-- inspect preview_divergence records" : "")
   );
+  const invariantViolations = record.invariantViolations ?? [];
+  if (record.invariantChecks !== undefined) {
+    console.log(
+      `invariant: ${record.invariantChecks} checks, ${invariantViolations.length} violations`
+    );
+    for (const v of invariantViolations.slice(0, 5)) console.log("  ", JSON.stringify(v));
+  }
   console.log(`decision log: ${record.decisionLogPath}`);
+  if (record.framesPath) console.log(`frames: ${record.framesPath}`);
   if (record.debriefPath) console.log(`debrief: ${record.debriefPath}`);
-  if (model === "mock") {
+  if (liveViewer) await liveViewer.finish();
+  const allMock = Object.values(seatModels).every((m) => m === "mock");
+  if (allMock) {
     // CI acceptance: the mock injects one transient and one persistent
-    // malformed response — both retry and fallback paths must have been
-    // exercised — (conversational default) the synthetic mock usage must
-    // have driven at least one compaction, (auto-resolve default) at
-    // least one forced record must exist, and (debrief default) the
-    // debrief artifact must have been written, all keylessly.
+    // malformed response per seat — both retry and fallback paths must
+    // have been exercised — (conversational default) the synthetic mock
+    // usage must have driven at least one compaction, (auto-resolve
+    // default) at least one forced record must exist, and (debrief
+    // default) the debrief artifact must have been written, all keylessly.
     // D10 acceptance: the injected transient-bad decision must carry ONE
     // recorded failed attempt classified out-of-range; the persistent-
     // garbage decision three unparseable/missing-option attempts.
+    // D14: every LLM seat that reached the fault-injection calls must show
+    // its own retry and fallback.
     const jsonlRows = (await readFile(record.decisionLogPath, "utf-8"))
       .split("\n")
       .filter((l) => l.trim() !== "")
       .map((l) => JSON.parse(l) as {
         record_type?: string;
+        seat?: string;
         failed_attempts?: { problem: string }[] | null;
         fallback?: boolean | null;
       });
@@ -286,17 +335,22 @@ if (command === "run-game") {
         r.failed_attempts!.length === 3 &&
         r.failed_attempts!.every((a) => a.problem === "unparseable" || a.problem === "missing-option")
     );
+    const seatsOk = Object.values(record.seats).every(
+      (st) => st.llmDecisions < 10 || (st.retriesTotal >= 1 && st.fallbacks >= 1)
+    );
     const ok =
       record.status === "completed" &&
       record.invalidRecords === 0 &&
+      invariantViolations.length === 0 &&
       record.retriesTotal >= 1 &&
       record.fallbacks >= 1 &&
+      seatsOk &&
       (record.contextMode !== "conversational" || record.compactions >= 1) &&
       (!record.autoResolve || record.forcedDecisions >= 1) &&
       (!record.debrief || record.contextMode !== "conversational" ||
         record.debriefPath !== null) &&
       (record.actions !== "compound" || record.compoundFulfilled >= 1) &&
-      (record.actions !== "compound" || record.orderFolded >= 1) &&
+      (record.actions !== "compound" || !record.seats.runner || record.orderFolded >= 1) &&
       transientOk &&
       persistentOk;
     console.log(
@@ -393,6 +447,121 @@ if (command === "run-game") {
   }
   const reportPath = await writeReport(repoRoot);
   console.log(reportPath);
+  process.exit(0);
+} else if (command === "smoke") {
+  // D16: fuzz the interface across the card pool — keyless. Pairs every
+  // corp precon with a runner precon (cycling the shorter list) and plays
+  // each pairing as rules-vs-rules (serializer invariant) and/or with the
+  // mock in the requested LLM seats (option-menu invariant, D14 adapter,
+  // record validation). Any non-completed game, error, invalid record or
+  // invariant violation fails the run.
+  const { readdir } = await import("node:fs/promises");
+  const { loadPrecon } = await import("./precons.js");
+  const { checkPool } = await import("./cardpool.js");
+  const { loadCardData } = await import("./carddata.js");
+  const cards = await loadCardData(repoRoot);
+  const pool = arg("pool", "all"); // all | base | extended
+  const modes = arg("seats", "rules,runner,corp,both").split(",");
+  const limit = parseInt(arg("limit", "0"), 10);
+  const names = (await readdir(join(repoRoot, "precons")))
+    .filter((f) => f.endsWith(".js"))
+    .map((f) => f.replace(/\.js$/, ""))
+    .sort();
+  const bySide: Record<string, string[]> = { corp: [], runner: [] };
+  for (const name of names) {
+    const deck = await loadPrecon(repoRoot, name);
+    const check = await checkPool(repoRoot, [deck]);
+    if (check.missing.length) continue;
+    const extended = check.sets.length > 0;
+    if (pool === "base" && extended) continue;
+    if (pool === "extended" && !extended) continue;
+    const side = cards.get(deck.identity)?.side;
+    if (side === "corp" || side === "runner") bySide[side]!.push(name);
+  }
+  const n = Math.max(bySide["corp"]!.length, bySide["runner"]!.length);
+  let pairs: [string, string][] = [];
+  for (let i = 0; i < n; i++) {
+    pairs.push([
+      bySide["corp"]![i % bySide["corp"]!.length]!,
+      bySide["runner"]![i % bySide["runner"]!.length]!,
+    ]);
+  }
+  if (limit > 0) pairs = pairs.slice(0, limit);
+  let failures = 0;
+  let games = 0;
+  // Engine self-lint about card definitions (the partial Core set's
+  // Datasucker) — logged identically in rules-vs-rules games; reported,
+  // not failed.
+  const ENGINE_LINT = /^LogError: .* will be ignored because it is set to automatic/;
+  const hardErrors = (errors: string[]): string[] => errors.filter((e) => !ENGINE_LINT.test(e));
+  const lintCount = (errors: string[]): number => errors.length - hardErrors(errors).length;
+  const browser = modes.includes("rules") ? await launchBrowser() : null;
+  for (let i = 0; i < pairs.length; i++) {
+    const [c, r] = pairs[i]!;
+    const s = seed + i;
+    for (const mode of modes) {
+      games++;
+      let line: string;
+      let ok: boolean;
+      if (mode === "rules") {
+        const rec = await runGame(
+          { repoRoot, seed: s, corpPrecon: c, runnerPrecon: r, extraParams: "&invariant=1" },
+          browser!
+        );
+        const v = rec.invariantViolations ?? [];
+        const hard = hardErrors(rec.errors);
+        ok = rec.status === "completed" && hard.length === 0 && v.length === 0;
+        line = `${rec.status} ${rec.winner ?? "-"} errors=${hard.length} lint=${lintCount(rec.errors)} ` +
+          `invariant=${rec.invariantChecks ?? 0}/${v.length}`;
+        if (!ok) console.log("   ", JSON.stringify([...hard.slice(0, 3), ...v.slice(0, 3)]).slice(0, 400));
+      } else {
+        const rec = await runLLMGame({
+          repoRoot, seed: s, corpPrecon: c, runnerPrecon: r,
+          seat: mode as SeatMode, model: "mock",
+          rulesSource: "digest", profile: "neutral", reasoningStyle: "brief",
+          debrief: false, frames: false, extraParams: "&invariant=1",
+          outDir: join(outDir, "smoke"),
+        });
+        const v = rec.invariantViolations ?? [];
+        const hard = hardErrors(rec.errors);
+        ok = rec.status === "completed" && hard.length === 0 &&
+          rec.invalidRecords === 0 && v.length === 0;
+        line = `${rec.status} ${rec.winner ?? "-"} errors=${hard.length} lint=${lintCount(rec.errors)} ` +
+          `invalid=${rec.invalidRecords} invariant=${rec.invariantChecks ?? 0}/${v.length} ` +
+          `multiSelects=${rec.multiSelects} neutralized=${rec.neutralizedReads}`;
+        if (!ok) console.log("   ", JSON.stringify([...hard.slice(0, 3), ...v.slice(0, 3)]).slice(0, 400));
+      }
+      if (!ok) failures++;
+      console.log(`${ok ? "ok  " : "FAIL"} s${s} ${mode.padEnd(6)} ${c} vs ${r}: ${line}`);
+    }
+  }
+  if (browser) await browser.close();
+  console.log(failures === 0 ? `SMOKE: all ${games} games clean` : `SMOKE: ${failures}/${games} FAILED`);
+  process.exit(failures === 0 ? 0 : 1);
+} else if (command === "pool") {
+  // D16: which precons are playable, and which set files each needs.
+  const { readdir } = await import("node:fs/promises");
+  const { loadPrecon } = await import("./precons.js");
+  const { checkPool } = await import("./cardpool.js");
+  const { loadCardData } = await import("./carddata.js");
+  const cards = await loadCardData(repoRoot);
+  const names = (await readdir(join(repoRoot, "precons")))
+    .filter((f) => f.endsWith(".js"))
+    .map((f) => f.replace(/\.js$/, ""))
+    .sort();
+  for (const side of ["corp", "runner"]) {
+    console.log(`\n${side.toUpperCase()} precons (✓ playable, ✗ has unimplemented cards):`);
+    for (const name of names) {
+      const deck = await loadPrecon(repoRoot, name);
+      if ((cards.get(deck.identity)?.side ?? "") !== side) continue;
+      const check = await checkPool(repoRoot, [deck]);
+      console.log(
+        `  ${check.missing.length ? "✗" : "✓"} ${name.padEnd(40)} ` +
+          `${check.sets.length ? check.sets.join("+") : "base pool"}` +
+          (check.missing.length ? ` — ${check.missing.length} unimplemented card(s)` : "")
+      );
+    }
+  }
   process.exit(0);
 } else if (command === "audit") {
   const file = arg("file", "");

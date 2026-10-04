@@ -1,6 +1,6 @@
 /** Tiny static file server over the repo root — replaces the PHP entry points
  *  for harness purposes. No dependencies, ephemeral port. */
-import { createServer, type Server } from "node:http";
+import { createServer, type IncomingMessage, type Server, type ServerResponse } from "node:http";
 import { readFile } from "node:fs/promises";
 import { extname, join, normalize } from "node:path";
 
@@ -15,6 +15,10 @@ const MIME: Record<string, string> = {
   ".woff": "font/woff",
   ".woff2": "font/woff2",
   ".ttf": "font/ttf",
+  ".svg": "image/svg+xml",
+  ".jsonl": "application/x-ndjson; charset=utf-8",
+  ".md": "text/markdown; charset=utf-8",
+  ".txt": "text/plain; charset=utf-8",
 };
 
 export interface StaticServer {
@@ -39,12 +43,21 @@ function placeholderImage(path: string): Buffer {
   return Buffer.from(PLACEHOLDER_PNG[key]!, "base64");
 }
 
-export async function startServer(repoRoot: string): Promise<StaticServer> {
+/** Optional dynamic route: return true when the request was handled. */
+export type ExtraRoute = (req: IncomingMessage, res: ServerResponse) => boolean;
+
+export async function startServer(
+  repoRoot: string,
+  extra?: ExtraRoute,
+  port = 0
+): Promise<StaticServer> {
   const server = createServer(async (req, res) => {
     try {
+      if (extra && extra(req, res)) return;
       const url = new URL(req.url ?? "/", "http://localhost");
       let path = decodeURIComponent(url.pathname);
-      if (path === "/") path = "/harness.html";
+      if (path.endsWith("/")) path += "index.html";
+      if (path === "/index.html") path = "/harness.html";
       // Confine to repo root.
       const safe = normalize(path).replace(/^(\.\.[/\\])+/, "");
       const file = join(repoRoot, safe);
@@ -98,7 +111,13 @@ export async function startServer(repoRoot: string): Promise<StaticServer> {
     }
   });
 
-  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  await new Promise<void>((resolve, reject) => {
+    server.once("error", reject);
+    server.listen(port, "127.0.0.1", () => {
+      server.off("error", reject);
+      resolve();
+    });
+  });
   const address = server.address();
   if (address === null || typeof address === "string") throw new Error("no port");
   return {
