@@ -92,7 +92,13 @@ the mock model in the deck's own seat. A deck qualifies only if every
 game completes with no hard error, leak, audit finding or invalid
 record. Refused decks, with the first problem seen:
 
-<!-- POOL-REFUSED -->
+| deck | side | sets | games failing (first) | first problem |
+|---|---|---|---|---|
+| Agency | Corp | elevation | 1 of 4 (rules game, seed 3) | LogError: TypeError: Cannot read properties of null (reading 'unique') |
+| Fashion Lab | Corp | elevation | 1 of 4 (rules game, seed 1) | game stalled: LogError: TypeError: Cannot read properties of null (reading 'unique') |
+| Economy, Chaos and FIxed Suit | Runner | coreset | 1 of 4 (rules game, seed 1) | game stalled: unhandledrejection: TypeError: Cannot read properties of undefined (reading 'length') |
+| Professional Opportunities | Runner | elevation | 1 of 4 (rules game, seed 3) | LogError: preferred option not matched with the above optionList and preferred: |
+| R&Devour | Runner | coreset | 1 of 4 (rules game, seed 3) | game stalled: unhandledrejection: TypeError: Cannot read properties of undefined (reading 'length') |
 
 These are engine defects: each reproduces in rules-AI-only games with
 no harness seat involved. `llm-game` and `run-match` refuse these decks

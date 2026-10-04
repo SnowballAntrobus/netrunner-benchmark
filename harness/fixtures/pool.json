@@ -1461,7 +1461,7 @@
      "invariantViolations": 0,
      "auditFindings": 0,
      "invalidRecords": null,
-     "firstProblem": "game stalled"
+     "firstProblem": "game stalled: unhandledrejection: TypeError: Cannot read properties of undefined (reading 'length')"
     },
     {
      "kind": "rules",
@@ -1642,7 +1642,7 @@
      "invariantViolations": 0,
      "auditFindings": 0,
      "invalidRecords": null,
-     "firstProblem": "game stalled"
+     "firstProblem": "game stalled: LogError: TypeError: Cannot read properties of null (reading 'unique')"
     },
     {
      "kind": "rules",
@@ -2461,7 +2461,7 @@
   "No Walls": {
    "side": "runner",
    "sets": [],
-   "qualified": false,
+   "qualified": true,
    "games": [
     {
      "kind": "rules",
@@ -2480,14 +2480,14 @@
      "kind": "rules",
      "seed": 2,
      "opponent": "Gateway Corp",
-     "status": "timeout",
-     "winner": null,
+     "status": "completed",
+     "winner": "corp",
      "hardErrors": 0,
      "lint": 0,
      "invariantViolations": 0,
      "auditFindings": 0,
      "invalidRecords": null,
-     "firstProblem": "game timeout"
+     "firstProblem": null
     },
     {
      "kind": "rules",
@@ -2821,7 +2821,7 @@
   "ProCo Ayla": {
    "side": "runner",
    "sets": [],
-   "qualified": false,
+   "qualified": true,
    "games": [
     {
      "kind": "rules",
@@ -2840,14 +2840,14 @@
      "kind": "rules",
      "seed": 2,
      "opponent": "Gateway Corp",
-     "status": "timeout",
-     "winner": null,
+     "status": "completed",
+     "winner": "corp",
      "hardErrors": 0,
      "lint": 0,
      "invariantViolations": 0,
      "auditFindings": 0,
      "invalidRecords": null,
-     "firstProblem": "game timeout"
+     "firstProblem": null
     },
     {
      "kind": "rules",
@@ -2943,20 +2943,20 @@
    "sets": [
     "elevation"
    ],
-   "qualified": false,
+   "qualified": true,
    "games": [
     {
      "kind": "rules",
      "seed": 1,
      "opponent": "Gateway Runner",
-     "status": "timeout",
-     "winner": null,
+     "status": "completed",
+     "winner": "corp",
      "hardErrors": 0,
-     "lint": 1,
+     "lint": 2,
      "invariantViolations": 0,
      "auditFindings": 0,
      "invalidRecords": null,
-     "firstProblem": "game timeout"
+     "firstProblem": null
     },
     {
      "kind": "rules",
@@ -3043,7 +3043,7 @@
      "invariantViolations": 0,
      "auditFindings": 0,
      "invalidRecords": null,
-     "firstProblem": "game stalled"
+     "firstProblem": "game stalled: unhandledrejection: TypeError: Cannot read properties of undefined (reading 'length')"
     },
     {
      "kind": "llm-mock",
@@ -3156,6 +3156,1076 @@
      "opponent": "Gateway Runner",
      "status": "completed",
      "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "llm-mock",
+     "seed": 1,
+     "opponent": "Gateway Runner",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": null,
+     "invalidRecords": 0,
+     "firstProblem": null
+    }
+   ]
+  },
+  "Sabbatical": {
+   "side": "runner",
+   "sets": [
+    "elevation"
+   ],
+   "qualified": true,
+   "games": [
+    {
+     "kind": "rules",
+     "seed": 1,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 2,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 3,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "llm-mock",
+     "seed": 1,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": null,
+     "invalidRecords": 0,
+     "firstProblem": null
+    }
+   ]
+  },
+  "Server Restructuring": {
+   "side": "runner",
+   "sets": [],
+   "qualified": true,
+   "games": [
+    {
+     "kind": "rules",
+     "seed": 1,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 2,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 3,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "llm-mock",
+     "seed": 1,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": null,
+     "invalidRecords": 0,
+     "firstProblem": null
+    }
+   ]
+  },
+  "SG-SU21 Boss": {
+   "side": "corp",
+   "sets": [],
+   "qualified": true,
+   "games": [
+    {
+     "kind": "rules",
+     "seed": 1,
+     "opponent": "Gateway Runner",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 2,
+     "opponent": "Gateway Runner",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 3,
+     "opponent": "Gateway Runner",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "llm-mock",
+     "seed": 1,
+     "opponent": "Gateway Runner",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": null,
+     "invalidRecords": 0,
+     "firstProblem": null
+    }
+   ]
+  },
+  "Shootin n Lootin": {
+   "side": "runner",
+   "sets": [
+    "elevation"
+   ],
+   "qualified": true,
+   "games": [
+    {
+     "kind": "rules",
+     "seed": 1,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 2,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 3,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "llm-mock",
+     "seed": 1,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": null,
+     "invalidRecords": 0,
+     "firstProblem": null
+    }
+   ]
+  },
+  "Spike or Strike": {
+   "side": "corp",
+   "sets": [],
+   "qualified": true,
+   "games": [
+    {
+     "kind": "rules",
+     "seed": 1,
+     "opponent": "Gateway Runner",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 2,
+     "opponent": "Gateway Runner",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 3,
+     "opponent": "Gateway Runner",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "llm-mock",
+     "seed": 1,
+     "opponent": "Gateway Runner",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": null,
+     "invalidRecords": 0,
+     "firstProblem": null
+    }
+   ]
+  },
+  "Spirit Breaker": {
+   "side": "runner",
+   "sets": [],
+   "qualified": true,
+   "games": [
+    {
+     "kind": "rules",
+     "seed": 1,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 2,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 3,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "llm-mock",
+     "seed": 1,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": null,
+     "invalidRecords": 0,
+     "firstProblem": null
+    }
+   ]
+  },
+  "Stealing from HQ": {
+   "side": "runner",
+   "sets": [],
+   "qualified": true,
+   "games": [
+    {
+     "kind": "rules",
+     "seed": 1,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 2,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 3,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "llm-mock",
+     "seed": 1,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": null,
+     "invalidRecords": 0,
+     "firstProblem": null
+    }
+   ]
+  },
+  "Tag Business": {
+   "side": "corp",
+   "sets": [],
+   "qualified": true,
+   "games": [
+    {
+     "kind": "rules",
+     "seed": 1,
+     "opponent": "Gateway Runner",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 2,
+     "opponent": "Gateway Runner",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 3,
+     "opponent": "Gateway Runner",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "llm-mock",
+     "seed": 1,
+     "opponent": "Gateway Runner",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": null,
+     "invalidRecords": 0,
+     "firstProblem": null
+    }
+   ]
+  },
+  "Taxing Reality": {
+   "side": "corp",
+   "sets": [],
+   "qualified": true,
+   "games": [
+    {
+     "kind": "rules",
+     "seed": 1,
+     "opponent": "Gateway Runner",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 2,
+     "opponent": "Gateway Runner",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 3,
+     "opponent": "Gateway Runner",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "llm-mock",
+     "seed": 1,
+     "opponent": "Gateway Runner",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": null,
+     "invalidRecords": 0,
+     "firstProblem": null
+    }
+   ]
+  },
+  "The Long Con": {
+   "side": "runner",
+   "sets": [],
+   "qualified": true,
+   "games": [
+    {
+     "kind": "rules",
+     "seed": 1,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 2,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 3,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "llm-mock",
+     "seed": 1,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": null,
+     "invalidRecords": 0,
+     "firstProblem": null
+    }
+   ]
+  },
+  "The Magic Hat": {
+   "side": "runner",
+   "sets": [],
+   "qualified": true,
+   "games": [
+    {
+     "kind": "rules",
+     "seed": 1,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 2,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 3,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "llm-mock",
+     "seed": 1,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": null,
+     "invalidRecords": 0,
+     "firstProblem": null
+    }
+   ]
+  },
+  "The Well-Paced Speedrunner": {
+   "side": "runner",
+   "sets": [],
+   "qualified": true,
+   "games": [
+    {
+     "kind": "rules",
+     "seed": 1,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 2,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 3,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "llm-mock",
+     "seed": 1,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": null,
+     "invalidRecords": 0,
+     "firstProblem": null
+    }
+   ]
+  },
+  "Thorny Grid": {
+   "side": "corp",
+   "sets": [],
+   "qualified": true,
+   "games": [
+    {
+     "kind": "rules",
+     "seed": 1,
+     "opponent": "Gateway Runner",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 2,
+     "opponent": "Gateway Runner",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 3,
+     "opponent": "Gateway Runner",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "llm-mock",
+     "seed": 1,
+     "opponent": "Gateway Runner",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": null,
+     "invalidRecords": 0,
+     "firstProblem": null
+    }
+   ]
+  },
+  "Tickets Please": {
+   "side": "runner",
+   "sets": [
+    "elevation"
+   ],
+   "qualified": true,
+   "games": [
+    {
+     "kind": "rules",
+     "seed": 1,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 2,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 3,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "llm-mock",
+     "seed": 1,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": null,
+     "invalidRecords": 0,
+     "firstProblem": null
+    }
+   ]
+  },
+  "Tranquil Swap": {
+   "side": "runner",
+   "sets": [],
+   "qualified": true,
+   "games": [
+    {
+     "kind": "rules",
+     "seed": 1,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 2,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 3,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "llm-mock",
+     "seed": 1,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": null,
+     "invalidRecords": 0,
+     "firstProblem": null
+    }
+   ]
+  },
+  "Trash King": {
+   "side": "runner",
+   "sets": [],
+   "qualified": true,
+   "games": [
+    {
+     "kind": "rules",
+     "seed": 1,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 2,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 3,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "llm-mock",
+     "seed": 1,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": null,
+     "invalidRecords": 0,
+     "firstProblem": null
+    }
+   ]
+  },
+  "Tricks, Economy and Icebreakers": {
+   "side": "runner",
+   "sets": [
+    "coreset"
+   ],
+   "qualified": true,
+   "games": [
+    {
+     "kind": "rules",
+     "seed": 1,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 2,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 3,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "llm-mock",
+     "seed": 1,
+     "opponent": "Gateway Corp",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": null,
+     "invalidRecords": 0,
+     "firstProblem": null
+    }
+   ]
+  },
+  "Wintermute": {
+   "side": "corp",
+   "sets": [],
+   "qualified": true,
+   "games": [
+    {
+     "kind": "rules",
+     "seed": 1,
+     "opponent": "Gateway Runner",
+     "status": "completed",
+     "winner": "runner",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 2,
+     "opponent": "Gateway Runner",
+     "status": "completed",
+     "winner": "corp",
+     "hardErrors": 0,
+     "lint": 0,
+     "invariantViolations": 0,
+     "auditFindings": 0,
+     "invalidRecords": null,
+     "firstProblem": null
+    },
+    {
+     "kind": "rules",
+     "seed": 3,
+     "opponent": "Gateway Runner",
+     "status": "completed",
+     "winner": "corp",
      "hardErrors": 0,
      "lint": 0,
      "invariantViolations": 0,

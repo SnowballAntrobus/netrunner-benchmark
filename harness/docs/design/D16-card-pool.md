@@ -25,7 +25,7 @@ file defines (the engine would silently drop it). Every game path
 computes and passes the sets, and the game record lists them in
 `cardSets`.
 
-<!-- POOL-COUNTS -->
+The engine ships **71 precons**: 33 Corp and 38 Runner. 47 use only the base pool; 24 need extra sets (18 Elevation, 6 the partial Core set). Every card in every precon is implemented by some set file.
 
 ## What the extended pool broke, and what was fixed in the harness
 
@@ -76,7 +76,15 @@ overrides) and warn about one never qualified; `smoke` skips failed
 decks; `pool` lists every deck with its sets and status; the project
 page shows the summary.
 
-<!-- POOL-RESULTS -->
+**Result (2026-10-04, seeds 1, 2, 3): 66 of 71 decks qualify** (31 of 33 Corp, 35 of 38 Runner). 5 are refused: 0 from the base pool and 5 from the extended sets. Every refusal from the parallel run was re-run on its own: three were overturned (No Walls, ProCo Ayla and Quick Returns had long games that timed out under load and qualify when run alone), and the rest reproduced exactly. Every remaining refusal fails in a rules-AI-only game, so the defect is the engine's, not the harness's.
+
+| deck | side | sets | games failing (first) | first problem |
+|---|---|---|---|---|
+| Agency | Corp | elevation | 1 of 4 (rules game, seed 3) | LogError: TypeError: Cannot read properties of null (reading 'unique') |
+| Fashion Lab | Corp | elevation | 1 of 4 (rules game, seed 1) | game stalled: LogError: TypeError: Cannot read properties of null (reading 'unique') |
+| Economy, Chaos and FIxed Suit | Runner | coreset | 1 of 4 (rules game, seed 1) | game stalled: unhandledrejection: TypeError: Cannot read properties of undefined (reading 'length') |
+| Professional Opportunities | Runner | elevation | 1 of 4 (rules game, seed 3) | LogError: preferred option not matched with the above optionList and preferred: |
+| R&Devour | Runner | coreset | 1 of 4 (rules game, seed 3) | game stalled: unhandledrejection: TypeError: Cannot read properties of undefined (reading 'length') |
 
 ## Smoke testing the interface across the pool
 
