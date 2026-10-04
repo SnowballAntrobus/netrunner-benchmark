@@ -28,10 +28,10 @@ export interface StaticServer {
   close: () => Promise<void>;
 }
 
-// The repo ships NO image assets (deployments serve them separately).
-// For the replay viewer (D08), missing engine textures resolve to embedded
-// solid-color placeholders so PIXI's loaders complete and the boot never
-// stalls; card FACES are canvas-generated page-side with real titles.
+// The repo ships no image assets (the engine's image pack, if extracted
+// into <repoRoot>/images, is served as is). Missing engine textures get
+// solid-color placeholders so PIXI's loaders complete and the page never
+// waits on them.
 const PLACEHOLDER_PNG: Record<string, string> = {
   corp: "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAmklEQVR4nO3QQRHAIADAMEAIQjCDfxVDRh5rFPQ697nf+LGlA7QG6ACtATpAa4AO0BqgA7QG6ACtATpAa4AO0BqgA7QG6ACtATpAa4AO0BqgA7QG6ACtATpAa4AO0BqgA7QG6ACtATpAa4AO0BqgA7QG6ACtATpAa4AO0BqgA7QG6ACtATpAa4AO0BqgA7QG6ACtATpAa4AO0B4/dwI2vPS60gAAAABJRU5ErkJggg==",
   runner: "iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAYAAACqaXHeAAAAl0lEQVR4nO3QURUAEADAQPSQVXRi3Iddgr3Ns/cdH1s6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugArQE6QGuADtAaoAO0BugA7QHAlgI4wirRAgAAAABJRU5ErkJggg==",
@@ -70,33 +70,8 @@ export async function startServer(
       try {
         body = await readFile(file);
       } catch (e) {
-        if (path.includes("/images/")) {
-          // The image pack extracts to <repoRoot>/images, but pages under
-          // /harness/ request images RELATIVE to themselves
-          // (/harness/images/...). Re-anchor any /images/ request at the
-          // repo-root pack before falling back to a placeholder.
-          const packPath = join(
-            repoRoot,
-            path.slice(path.indexOf("/images/") + 1)
-          );
-          try {
-            const packBody = await readFile(packPath);
-            res.writeHead(200, {
-              "content-type":
-                MIME[extname(packPath).toLowerCase()] ?? "application/octet-stream",
-              "cache-control": "no-store",
-            });
-            res.end(packBody);
-            return;
-          } catch {
-            /* pack absent or file missing — placeholder below */
-          }
-          res.writeHead(200, {
-            "content-type": "image/png",
-            "cache-control": "no-store",
-            // The viewer probes this to decide canvas faces vs real art.
-            "x-harness-placeholder": "1",
-          });
+        if (path.startsWith("/images/")) {
+          res.writeHead(200, { "content-type": "image/png", "cache-control": "no-store" });
           res.end(placeholderImage(path));
           return;
         }

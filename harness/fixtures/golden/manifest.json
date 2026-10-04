@@ -1,5 +1,5 @@
 {
-  "comment": "Golden-log regression fixtures (PHASE1 M2). Each entry is a seeded rules-AI vs rules-AI game; fixtures freeze the normalized log and result. Re-bless after intentional engine-affecting changes with: npm run golden -- record",
+  "comment": "Golden-log regression fixtures. Each entry is a seeded rules-AI vs rules-AI game; fixtures freeze the normalized log and result. Re-bless after intentional engine-affecting changes with: npx tsx src/cli.ts golden record",
   "games": [
     { "id": "g01", "seed": 101, "corp": "Gateway Corp", "runner": "Gateway Runner" },
     { "id": "g02", "seed": 102, "corp": "Advancement Factory", "runner": "No Walls" },

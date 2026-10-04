@@ -1,4 +1,4 @@
-/** Orchestrates one headless rules-AI vs rules-AI game (M1).
+/** Orchestrates one headless rules-AI vs rules-AI game.
  *  Launches Chromium via Playwright, navigates to harness.html in faceoff
  *  mode, and waits for the page's __harness surface to report a result.
  *  All page interaction goes through window.__harness — nothing else. */
@@ -22,9 +22,9 @@ export interface GameRecord {
   seed: number;
   corpPrecon: string;
   runnerPrecon: string;
-  /** D16: card sets loaded beyond the base pool (absent = base pool). */
+  /** Card sets loaded beyond the base pool (absent = base pool). */
   cardSets?: string[];
-  status: "completed" | "timeout" | "stalled" | "crashed";
+  status: "completed" | "timeout" | "stalled" | "crashed" | "resigned";
   winner: "corp" | "runner" | null;
   reason: string | null;
   corpAgendaPoints: number | null;
@@ -40,7 +40,7 @@ export interface GameRecord {
   invariantChecks?: number; // serialized-state checks performed (&invariant=1)
   invariantViolations?: object[]; // no-cheating violations found (&invariant=1)
   sampleState?: object | null; // one mid-game runner-view state (&invariant=1)
-  planted?: object | null; // D11 selftest: what &plant= injected, where
+  planted?: object | null; // selftest: what &plant= injected, where
 }
 
 interface HarnessSurface {

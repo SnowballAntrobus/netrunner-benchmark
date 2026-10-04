@@ -1,4 +1,4 @@
-/** Viewer bundles and the project site's data (D15/D17).
+/** Viewer bundles and the project site's data.
  *
  *  A bundle is the board viewer's whole input for one game: metadata, the
  *  card dictionary, public narration, deduplicated board frames, and one
@@ -11,12 +11,13 @@
  *  tables); `cli.ts replay` writes one into a run folder and serves it.
  */
 import { existsSync } from "node:fs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { resolveGameArtifacts } from "./paths.js";
 import { loadPrecon } from "./precons.js";
-import { eraOf, ERA_LABEL, CURRENT_ERA, seatEntries, type GameRecordLite } from "./corpus.js";
+import { loadPoolManifest } from "./cardpool.js";
+import { ABLATION_LABEL, isStandard, seatEntries, type GameRecordLite } from "./corpus.js";
 
 interface ViewerModel {
   buildGame(input: {
@@ -90,12 +91,12 @@ export async function writeBundle(repoRoot: string, runPath: string, outFile: st
 
 export interface SiteGameEntry {
   id: string;
-  era: number;
-  eraLabel: string;
+  /** False for the `--ai-branches rules` ablation (see corpus.ts). */
+  standard: boolean;
   seed: number | null;
   corpPrecon: string;
   runnerPrecon: string;
-  seats: { seat: string; model: string; llmDecisions: number; costUsd: number | null }[];
+  seats: { seat: string; model: string; driver: string; llmDecisions: number; costUsd: number | null }[];
   status: string;
   winner: string | null;
   reason: string | null;
@@ -110,14 +111,21 @@ export interface SiteGameEntry {
   bundle: string | null; // path relative to site/
 }
 
+/** The demo shown while the corpus has no games with frames: a committed
+ *  keyless game (the mock model plays random legal moves as the Runner). */
+export const DEMO_GAME = join("harness", "fixtures", "mock-game");
+
 /** Bundles for every corpus game + the site's index.json. */
-export async function buildSiteData(repoRoot: string): Promise<{ games: number; bytes: number }> {
-  const { readdir } = await import("node:fs/promises");
+export async function buildSiteData(
+  repoRoot: string
+): Promise<{ games: number; bytes: number; demo: boolean }> {
   const gamesDir = join(repoRoot, "harness", "data", "games");
   const outDir = join(repoRoot, "site", "data");
+  await rm(join(outDir, "games"), { recursive: true, force: true }); // no stale bundles
   const entries: SiteGameEntry[] = [];
   let bytes = 0;
-  for (const id of (await readdir(gamesDir)).sort()) {
+  const ids = existsSync(gamesDir) ? (await readdir(gamesDir)).sort() : [];
+  for (const id of ids) {
     const dir = join(gamesDir, id);
     if (!existsSync(join(dir, "record.json"))) continue;
     const record = JSON.parse(await readFile(join(dir, "record.json"), "utf-8")) as GameRecordLite & {
@@ -133,14 +141,14 @@ export async function buildSiteData(repoRoot: string): Promise<{ games: number; 
     }
     entries.push({
       id,
-      era: eraOf(record),
-      eraLabel: ERA_LABEL[eraOf(record)] ?? "",
+      standard: isStandard(record),
       seed: record.seed ?? null,
       corpPrecon: record.corpPrecon ?? "?",
       runnerPrecon: record.runnerPrecon ?? "?",
       seats: seatEntries(record).map((s) => ({
         seat: s.seat,
         model: s.model,
+        driver: s.driver,
         llmDecisions: s.llmDecisions,
         costUsd: s.costUsd,
       })),
@@ -158,8 +166,21 @@ export async function buildSiteData(repoRoot: string): Promise<{ games: number; 
       bundle,
     });
   }
-  // Card-pool qualification summary (D16), when the manifest exists.
-  const { loadPoolManifest } = await import("./cardpool.js");
+  let demo: { bundle: string; seed: number | null; corpPrecon: string; runnerPrecon: string } | null = null;
+  if (!entries.some((e) => e.bundle)) {
+    const dir = join(repoRoot, DEMO_GAME);
+    const record = JSON.parse(await readFile(join(dir, "record.json"), "utf-8")) as GameRecordLite;
+    const rel = "data/games/demo.json";
+    const out = await writeBundle(repoRoot, dir, join(repoRoot, "site", rel));
+    bytes += out.bytes;
+    demo = {
+      bundle: rel,
+      seed: record.seed ?? null,
+      corpPrecon: record.corpPrecon ?? "?",
+      runnerPrecon: record.runnerPrecon ?? "?",
+    };
+  }
+  // Card-pool qualification summary, when the manifest exists.
   const manifest = await loadPoolManifest(repoRoot);
   const pool = manifest
     ? {
@@ -181,12 +202,12 @@ export async function buildSiteData(repoRoot: string): Promise<{ games: number; 
     : null;
   const index = {
     generated: new Date().toISOString().slice(0, 10),
-    currentEra: CURRENT_ERA,
-    eras: ERA_LABEL,
+    ablation: ABLATION_LABEL,
     pool,
+    demo,
     games: entries,
   };
   await mkdir(outDir, { recursive: true });
   await writeFile(join(outDir, "index.json"), JSON.stringify(index, null, 1) + "\n");
-  return { games: entries.length, bytes };
+  return { games: entries.length, bytes, demo: demo !== null };
 }

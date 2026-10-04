@@ -1,12 +1,12 @@
-/** Card pool (D16): which engine set files a game needs.
+/** Card pool: which engine set files a game needs.
  *
  *  harness.html statically loads the base pool — System Gateway, System
  *  Update 2021 and the tutorial set (what every golden fixture uses).
  *  Decks built on other sets (Elevation, Midnight Sun, the partial Core
  *  set, ...) need those set files too; the page loads them on demand from
  *  `&sets=a,b` (document.write'd right after the base sets, so engine
- *  load order is preserved). Base-pool games pass no param and load
- *  byte-identically to before.
+ *  load order is preserved). Base-pool games pass no param and load only
+ *  the base sets.
  *
  *  Membership is derived from the set files themselves (every
  *  `cardSet[N] =` / `coreSet[N] =` definition), never from a precon's
@@ -81,12 +81,12 @@ export async function requiredSets(repoRoot: string, decks: Deck[]): Promise<str
   return check.sets;
 }
 
-/** URL fragment for harness.html / inspect.html (empty for the base pool). */
+/** URL fragment for harness.html (empty for the base pool). */
 export function setsParam(sets: string[]): string {
   return sets.length > 0 ? `&sets=${sets.join(",")}` : "";
 }
 
-// ---- qualification (D16) ---------------------------------------------------
+// ---- qualification ---------------------------------------------------------
 
 /** The engine's own self-lint about card definitions ("... should not be
  *  automatic", "... will be ignored because it is set to automatic").
@@ -137,7 +137,7 @@ export async function loadPoolManifest(repoRoot: string): Promise<PoolManifest |
   }
 }
 
-/** Refuse decks the qualification run failed (D16) — the extended pool
+/** Refuse decks the qualification run failed — the extended pool
  *  carries real engine defects (crashes, stalls) that would corrupt
  *  benchmark data. `allow` overrides; unknown decks only warn. */
 export async function assertQualified(

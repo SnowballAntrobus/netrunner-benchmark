@@ -2,7 +2,7 @@
  *  https://platform.claude.com/docs/en/about-claude/pricing before
  *  relying on the $ column for reporting. Longest-prefix match; unknown
  *  models (including "mock") get NO estimate — the report shows dashes,
- *  never a guess. For OpenRouter models (D13) the report prefers the
+ *  never a guess. For OpenRouter models the report prefers the
  *  provider-REPORTED per-call cost on the game record over any entry
  *  here. Cache-write rate is the 5-minute TTL our client uses. */
 export interface ModelPrices {

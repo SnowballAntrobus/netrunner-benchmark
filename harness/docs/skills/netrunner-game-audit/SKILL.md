@@ -7,15 +7,14 @@ description: Qualitative rules-conformance audit of a netrunner-benchmark game. 
 
 You are auditing one recorded game from the netrunner-benchmark harness
 for rules conformance — a qualitative complement to the deterministic
-conservation auditor (`npm run audit`, judge tier one). Your output is a
+conservation auditor (`npx tsx src/cli.ts audit`, judge tier one). Your output is a
 written report; you spend no game-API credit.
 
 ## Inputs
 
 - A game record: `harness/out/<game_id>/record.json` (or
   `harness/data/games/<game_id>/record.json`, or a golden fixture
-  `harness/fixtures/golden/g*.json`). Contains the full log. Legacy flat
-  games use `<game_id>.json`.
+  `harness/fixtures/golden/g*.json`). Contains the full log.
 - For LLM games, the decision log `decisions.jsonl` next to the record —
   one record per decision, both seats; the records of the seat(s) a
   model played (`record.llmSeat`: runner, corp or both) carry the exact
@@ -25,19 +24,19 @@ written report; you spend no game-API credit.
   audit --file <run> --review-sample 12` writes `audit-sample.md`.
 - Rules ground truth, in order of authority for rulings:
   1. `harness/rules/comprehensive-rules.txt` — the pinned NSG
-     Comprehensive Rules snapshot (fetched by `npm run fetch-rules`).
+     Comprehensive Rules snapshot (fetched by `npx tsx src/cli.ts fetch-rules`).
      Cite rule numbers (e.g. "CR 10.4.x") in every finding.
   2. `harness/rules/learn-to-play-*.txt` and `run-guide.txt` — what the
      LLM player was actually shown; use these to judge whether the MODEL
      had the information, distinct from what the RULES require.
   If the comprehensive-rules snapshot is missing, ask the user to run
-  `npm run fetch-rules` (fallback: https://rules.nullsignal.games/, and
+  `npx tsx src/cli.ts fetch-rules` (fallback: https://rules.nullsignal.games/, and
   note in the report that an unpinned source was used).
 
 ## Procedure
 
 1. **Tier one first.** If shell access is available, run
-   `npm run audit -- --file <game.json>` in `harness/` and include its
+   `npx tsx src/cli.ts audit --file <run>` in `harness/` and include its
    verdict. If it fails, that finding leads the report.
 2. **Sample windows.** From the log, select: the first two turns (setup,
    mulligans, opening economy); two mid-game turns that contain runs; every
@@ -87,5 +86,5 @@ report for review — do not commit it yourself unless asked.
   fine for offline audit, never for pasting into a live game's context.
 - The engine's known vernacular ("n" = continue, SPOILER lines as
   omniscient debug output) is documented in `harness/docs/` — read
-  DECISION_LOG.md before your first audit.
+  records.md before your first audit.
 - Absence of findings in sampled windows is evidence, not proof; say so.

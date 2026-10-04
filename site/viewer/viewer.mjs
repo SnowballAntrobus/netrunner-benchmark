@@ -1,4 +1,4 @@
-// Netrunner Benchmark — board viewer (D15).
+// Netrunner Benchmark — board viewer.
 //
 // Sources (URL params):
 //   ?game=<url>   a game bundle written by `cli.ts site` / `cli.ts replay`
@@ -90,11 +90,16 @@ function seatOf(side) {
 
 function seatChip(side, withSeat = false) {
   const model = seatOf(side);
+  const info = (state.game.meta.seats || {})[side] || {};
   const chip = el("span", `seat-chip ${side}`);
   chip.appendChild(el("span", "dot"));
-  const who = model ? model : "rules AI";
+  const who = model ? (info.driver === "mcp" ? `${model} (MCP)` : model) : "rules AI";
   chip.appendChild(document.createTextNode(withSeat ? `${side === "corp" ? "Corp" : "Runner"} · ${who}` : who));
-  chip.title = model ? `${side} played by ${model}` : `${side} played by the engine's rules AI`;
+  chip.title = !model
+    ? `${side} played by the engine's rules AI`
+    : info.driver === "mcp"
+      ? `${side} played by ${model} from a chat app over MCP${info.client ? ` (${info.client.name} ${info.client.version})` : ""}`
+      : `${side} played by ${model}`;
   return chip;
 }
 
@@ -859,7 +864,12 @@ async function startLive() {
     builder = new GameBuilder(
       {
         ...metaFromRecord({ ...meta, model: meta.models && (meta.models.runner || meta.models.corp) }),
-        seats: Object.fromEntries(Object.entries(meta.models || {}).map(([s, m]) => [s, { model: m }])),
+        seats: Object.fromEntries(
+          Object.entries(meta.models || {}).map(([s, m]) => [
+            s,
+            { model: m, driver: meta.drivers?.[s]?.driver || "api", client: meta.drivers?.[s]?.client || null },
+          ])
+        ),
         ...(meta.match ? { match: meta.match } : {}),
       },
       {}
@@ -887,7 +897,8 @@ async function startLive() {
   src.addEventListener("end", (e) => {
     const { record, more } = JSON.parse(e.data);
     if (!builder) return;
-    Object.assign(builder.game.meta, metaFromRecord(record), { seats: builder.game.meta.seats });
+    const final = metaFromRecord(record);
+    Object.assign(builder.game.meta, final, Object.keys(final.seats).length ? {} : { seats: builder.game.meta.seats });
     builder.finish({ winner: record.winner, reason: record.reason });
     refresh();
     setTitle();

@@ -44,9 +44,9 @@
       <h2 id="watch-title">Watch a game</h2>
       <p>The board viewer replays a recorded game decision by decision: the full board, the model's reasoning written before it chose, and the exact menu it chose from. Switch perspective to see only what one side could see. The same viewer follows a game live while it is being played.</p>
       <figure id="featured">
-        <div class="viewer-frame"><iframe id="featured-frame" title="Board viewer — featured game" loading="lazy" src="./viewer/?game=../data/games/llm-claude-opus-5-s7-1786422381592.json"></iframe></div>
-        <div class="figure-actions"><a id="featured-open" href="./viewer/?game=../data/games/llm-claude-opus-5-s7-1786422381592.json">Open full screen</a><span>← → step · Shift+← → model decisions · Space play · 1 2 3 perspective</span></div>
-        <figcaption><strong>Figure 1. Claude Opus 5 as the Runner against the rules-based Corp.</strong> Gateway Runner vs Gateway Corp, seed 7: the corpus's first Runner win, 7–3 on agenda points over 15 turns. Gold outlines mark what changed since the previous step; omniscient view labels the cards the opponent could not see.</figcaption>
+        <div class="viewer-frame"><iframe id="featured-frame" title="Board viewer: featured game" loading="lazy"></iframe></div>
+        <div class="figure-actions"><a id="featured-open" href="./viewer/">Open full screen</a><span>← → step · Shift+← → model decisions · Space play · 1 2 3 perspective</span></div>
+        <figcaption><strong>Figure 1. A recorded game in the board viewer.</strong> <span id="featured-caption">Loading…</span> Gold outlines mark what changed since the previous step; the omniscient view tags the cards the opponent could not see.</figcaption>
       </figure>
       <h3>All recorded games</h3>
       <ul class="gallery" id="gallery" aria-live="polite"><li class="table-note">Loading games…</li></ul>
@@ -71,6 +71,7 @@
       </figure>
       <p><strong>The seat.</strong> Each decision the engine asks of a seat becomes one request: the game state as that player sees it, the recent public log, and the numbered list of legal options. The model answers through a forced tool call — reasoning first, then an option index. Decisions with a single legal option resolve without a call, and multi-step actions are offered as complete actions ("play Jailbreak, then run R&amp;D") so the model states each intention once. A model can play either side: <code>--seat runner</code>, <code>--seat corp</code>, or <code>--seat both</code> for model-versus-model games, each seat with its own transcript.</p>
       <p><strong>Honest menus.</strong> The engine's card scripts contain shortcuts written for its own AI that quietly prune a menu to the rules AI's preferred choice. The harness makes card code treat a model's seat as a human player's, so the model always receives the full legal menu a person would — while hidden information stays hidden, card searches show the searching player their own deck, and multi-card selections are answered one card at a time.</p>
+      <p><strong>Play from a chat app.</strong> An MCP server lets Claude or ChatGPT play a seat from its own chat app, so testing runs on a subscription instead of API spend: against the rules AI, against another conversation, or Claude against ChatGPT. The game, its records and its checks are the same; the record notes that the seat was played over MCP and that the app, not the harness, managed the conversation.</p>
       <p><strong>Memory.</strong> A game is one running conversation. When the transcript nears the model's context limit, the model writes a summary for its future self and play continues from that memo plus its most recent exchanges — the memo is shown in the viewer at the moment it was written. After the game, the model answers a short debrief.</p>
       <ul class="facts" aria-label="Mechanically enforced invariants">
         <li><b>Deterministic</b>Seeded engine; golden games must replay byte-identically, and recorded model games re-simulate decision by decision.</li>
@@ -83,7 +84,7 @@
 
     <section id="results" aria-labelledby="results-title">
       <h2 id="results-title">Results</h2>
-      <p class="callout"><strong>Preliminary.</strong> The games below are shakedown runs: one seed, one matchup, one game per model, recorded before the interface fixes that began the current era. They show the pipeline working end to end, not a ranking of models.</p>
+      <p class="callout"><strong>In progress.</strong> The first measured games are being recorded. The earlier shakedown games were removed: they predate a fix that stopped the rules AI's shortcuts from pruning the models' menus, so they are not comparable with games played now.</p>
       <div class="table-scroll" role="region" aria-label="Recorded games" tabindex="0">
         <table class="data-table" id="games-table">
           <caption>Recorded games</caption>
@@ -108,9 +109,10 @@ npx tsx src/cli.ts llm-game --seat corp --model claude-haiku-4-5
 npx tsx src/cli.ts llm-game --seat both --corp-model claude-haiku-4-5 \
     --runner-model openrouter/openai/gpt-5.4-mini
 npx tsx src/cli.ts run-match --games 10 --seed 1 --model claude-haiku-4-5
+npx tsx src/cli.ts mcp                              # play from Claude or ChatGPT
 npx tsx src/cli.ts replay --file out/&lt;game&gt;      # board viewer
 npx tsx src/cli.ts site --serve                     # this page, locally</code></pre>
-      <p>The <a href="https://github.com/SnowballAntrobus/netrunner-benchmark#readme">README</a> documents every command, flag and record format.</p>
+      <p>The <a href="https://github.com/SnowballAntrobus/netrunner-benchmark#readme">README</a> and its linked docs cover every command, the record format, and how to connect a chat app.</p>
     </section>
 
     <section id="references" aria-labelledby="references-title">

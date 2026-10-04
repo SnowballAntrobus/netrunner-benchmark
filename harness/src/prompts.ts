@@ -1,11 +1,11 @@
-/** System prompts for the LLM seats (PHASE1 M4; Corp seat since D14).
+/** System prompts for the LLM seats.
  *
  *  Static per game (rules digest + interface guide + both decklists), so it
  *  is sent with a prompt-cache breakpoint — ~300+ decisions per game reuse
- *  the cached prefix. Every Runner-seat string is unchanged from era 3 (a
- *  Runner vs rules-Corp prompt is byte-identical); the Corp seat gets
- *  parallel texts written to the same standard, and the opponent is only
- *  ever characterized by the `expert` profile.
+ *  the cached prefix. Runner-seat strings are frozen (a Runner vs
+ *  rules-Corp prompt stays byte-identical, so games stay comparable); the
+ *  Corp seat gets parallel texts written to the same standard, and the
+ *  opponent is only ever characterized by the `expert` profile.
  */
 
 export type Seat = "runner" | "corp";
@@ -136,8 +136,8 @@ export interface PromptProfile {
 export const PROFILES: Record<string, Omit<PromptProfile, "reasoningStyle">> = {
   neutral: {
     name: "neutral",
-    // Says NOTHING about the opponent's nature — opponent framing is a
-    // test-time variable (see PROMPTING.md "Opponent framing"), and the
+    // Says NOTHING about the opponent's nature — opponent framing measurably
+    // shifts a model's strategy, so it is a test-time variable and the
     // default arm is silence.
     framing:
       "You are playing Android: Netrunner as the Runner. Your objective is " +
@@ -154,7 +154,7 @@ export const PROFILES: Record<string, Omit<PromptProfile, "reasoningStyle">> = {
 };
 
 /** The profile's framing sentence for a seat. Runner vs the rules AI is
- *  exactly the profile's stored text (era-3 comparability); other seats
+ *  exactly the profile's stored text (keeps games comparable); other seats
  *  and opponents get the same sentence with the roles swapped. */
 export function framingFor(
   profile: Omit<PromptProfile, "reasoningStyle">,
@@ -247,8 +247,8 @@ FIRST, then the "option" index — your reasoning should produce the choice,
 not justify it afterwards.
 - option: the integer index of your choice`;
 
-/** D14: the Corp seat's interface guide — the Runner guide's structure
- *  and standards, with the Corp's commands and point of view. */
+/** The Corp seat's interface guide — the Runner guide's structure and
+ *  standards, with the Corp's commands and point of view. */
 export const CORP_INTERFACE_GUIDE = `# How you play (harness interface)
 
 Each decision you receive contains: the current game state as JSON (your
@@ -298,15 +298,15 @@ FIRST, then the "option" index — your reasoning should produce the choice,
 not justify it afterwards.
 - option: the integer index of your choice`;
 
-/** D14: when both seats are models the page renders as the Runner (the
- *  shared log must stay Runner-honest), so the Corp is told how its own
- *  cards appear in the narration — mechanics disclosure only. */
+/** When both seats are models the page renders as the Runner (the shared
+ *  log must stay Runner-honest), so the Corp is told how its own cards
+ *  appear in the narration — mechanics disclosure only. */
 export const CORP_SHARED_LOG_NOTE = `
 The game log is written from the Runner's point of view: your own cards
 appear in it as "hidden card" until they are rezzed or revealed. The
 state JSON and your options always show your full view.`;
 
-/** Appended to the interface guide in conversational mode (D01): honest
+/** Appended to the interface guide in conversational mode: honest
  *  mechanics disclosure only — how the model's memory works, no advice on
  *  what to do with it. */
 export const CONVERSATIONAL_NOTE = `
@@ -316,7 +316,21 @@ context limit, you will be asked to write a summary for your future self,
 and play continues from that summary plus your most recent exchanges
 verbatim.`;
 
-/** D09: the actions-mode paragraph of the interface guide — worded for
+/** Client-managed conversations (MCP): the chat app holds the history and
+ *  the harness never compacts it, so the conversational note's summary
+ *  sentence does not apply. Mechanics only, like every authored word. */
+export const CLIENT_NOTE = `
+This is a continuous conversation: your previous decisions and reasoning
+remain in your context as the game proceeds. Each decision arrives as the
+result of a tool call; answer it by calling choose_option.`;
+
+/** Compact view (MCP play, to save the chat's context). */
+export const COMPACT_VIEW_NOTE = `
+To save context, each decision shows a status line, the recent public log
+and the legal options instead of the full state JSON. Call get_state for
+the full state (your view) whenever you need it.`;
+
+/** The actions-mode paragraph of the interface guide — worded for
  *  whichever protocol the model actually faces; recorded in the saved
  *  system prompt like every authored word. */
 export const ACTIONS_PARAGRAPHS = {
@@ -343,16 +357,18 @@ export interface SystemPromptOptions {
   /** Default: the seat's digest (RULES_DIGEST / CORP_RULES_DIGEST). */
   rulesText?: string;
   profile?: PromptProfile;
-  contextMode?: "conversational" | "stateless";
+  contextMode?: "conversational" | "stateless" | "client";
+  /** Compact decisions omit the state JSON (MCP play); the guide says so. */
+  decisionView?: "full" | "compact";
   actionsMode?: "compound" | "split";
   seat?: Seat;
   opponent?: OpponentKind;
-  /** D14: the page narrates from the Runner's view (both seats are models)
-   *  — the Corp guide then discloses how its own cards appear in the log. */
+  /** The page narrates from the Runner's view (both seats are models) —
+   *  the Corp guide then discloses how its own cards appear in the log. */
   runnerPerspectiveLog?: boolean;
 }
 
-/** D14: the Corp seat's actions-mode paragraph (same protocol, Corp verbs). */
+/** The Corp seat's actions-mode paragraph (same protocol, Corp verbs). */
 export const CORP_ACTIONS_PARAGRAPHS = {
   compound:
     "\nCommand options that carry a subject are COMPLETE actions: choosing\n" +
@@ -377,6 +393,7 @@ export function buildSystemPrompt(options: SystemPromptOptions): string {
   const opponent = options.opponent ?? "rules";
   const profile = options.profile ?? { ...PROFILES["neutral"]!, reasoningStyle: "brief" };
   const contextMode = options.contextMode ?? "conversational";
+  const decisionView = options.decisionView ?? "full";
   const actionsMode = options.actionsMode ?? "compound";
   const digest = seat === "runner" ? RULES_DIGEST : CORP_RULES_DIGEST;
   // The digest's "Strategic basics" section is harness-authored advice;
@@ -398,7 +415,9 @@ export function buildSystemPrompt(options: SystemPromptOptions): string {
     "",
     rules,
     "",
-    guide + (contextMode === "conversational" ? CONVERSATIONAL_NOTE : ""),
+    guide +
+      (contextMode === "conversational" ? CONVERSATIONAL_NOTE : contextMode === "client" ? CLIENT_NOTE : "") +
+      (decisionView === "compact" ? COMPACT_VIEW_NOTE : ""),
     REASONING_DIRECTIVES[profile.reasoningStyle],
     "",
     "# Card reference (open decklists)",
@@ -423,7 +442,7 @@ export interface PageDecisionRequest {
   options: Record<string, unknown>[];
   state: Record<string, unknown>;
   reproductionCode: string | null;
-  /** D05 analysis marker (select decisions only): set when the follow-up
+  /** Analysis marker (select decisions only): set when the follow-up
    *  menu differs from the preview attached to the chosen command.
    *  NEVER included in the decision message — the model sees the
    *  authoritative actual menu, not this. */
@@ -432,21 +451,21 @@ export interface PageDecisionRequest {
     previewed_at_seq: number;
     preview: unknown[];
   };
-  /** D03: single-option decision auto-resolved at the page layer — the
-   *  host logs it (no API call, no transcript entry) and answers 0. */
+  /** Single-option decision auto-resolved at the page layer — the host
+   *  logs it (no API call, no transcript entry) and answers 0. */
   forced?: boolean;
-  /** D09: this command menu was FUSED (options are complete actions). */
+  /** This command menu was FUSED (options are complete actions). */
   compound?: boolean;
-  /** D09: this select fulfills a prior compound choice — host records it
-   *  and answers compoundChoice; no API call, no transcript entry. */
+  /** This select fulfills a prior compound choice — host records it and
+   *  answers compoundChoice; no API call, no transcript entry. */
   compoundFulfilled?: boolean;
   compoundChoice?: number;
-  /** D09-2: access-order select folded by the structural guard — host
-   *  records it and answers 0; no API call. */
+  /** Access-order select folded by the structural guard — host records
+   *  it and answers 0; no API call. */
   orderFolded?: boolean;
-  /** D09-2: fused menu length when at/over the alert threshold. */
+  /** Fused menu length when at/over the alert threshold. */
   largeMenu?: number;
-  /** D14: one step of a card-by-card multi-select — shown to the model. */
+  /** One step of a card-by-card multi-select — shown to the model. */
   multiSelect?: { slot: number; of: number; chosen: unknown[] };
 }
 
@@ -460,8 +479,8 @@ function decisionHeader(request: PageDecisionRequest): string {
   return `Decision #${request.seq} — ${turn}, phase ${phase}, type ${request.decisionType}.`;
 }
 
-/** D14: the multi-select step line — present only on those decisions, so
- *  every other decision message is unchanged. */
+/** The multi-select step line — present only on those decisions, so it
+ *  never alters any other decision message. */
 function multiSelectLine(request: PageDecisionRequest): string[] {
   const m = request.multiSelect;
   if (!m) return [];
@@ -492,7 +511,57 @@ export function buildDecisionMessage(request: PageDecisionRequest): string {
   ].join("\n");
 }
 
-/** History-variant B (D01 "lean"): what a PAST decision's user turn keeps
+/** One line of public counters for the compact view: the seat's own side
+ *  first, then the opponent's. */
+function statusLine(state: Record<string, unknown>): string {
+  const num = (v: unknown): string => (typeof v === "number" ? String(v) : "?");
+  const toWin = num(state["agendaPointsToWin"]);
+  const runner = (state["runner"] ?? {}) as Record<string, unknown>;
+  const corp = (state["corp"] ?? {}) as Record<string, unknown>;
+  const grip = Array.isArray(runner["grip"]) ? runner["grip"].length : null;
+  const hqRaw = corp["hq"] as { count?: number; cards?: unknown[] } | unknown[] | undefined;
+  const hq = Array.isArray(hqRaw) ? hqRaw.length : (hqRaw?.count ?? hqRaw?.cards?.length ?? null);
+  const r =
+    `Runner: ${num(runner["credits"])} credits, ${num(runner["clicks"])} clicks, ` +
+    `${grip ?? "?"} cards in grip, ${num(runner["tags"])} tags, ${num(runner["agendaPoints"])}/${toWin} agenda points`;
+  const c =
+    `Corp: ${num(corp["credits"])} credits, ${num(corp["clicks"])} clicks, ` +
+    `${hq ?? "?"} cards in HQ, ${num(corp["badPublicity"])} bad publicity, ${num(corp["agendaPoints"])}/${toWin} agenda points`;
+  return state["viewer"] === "corp" ? `${c} · ${r}` : `${r} · ${c}`;
+}
+
+/** The seat's own hand, by title (its own view: always visible to it). */
+function handLine(state: Record<string, unknown>): string | null {
+  const viewer = state["viewer"] === "corp" ? "corp" : "runner";
+  const side = (state[viewer] ?? {}) as Record<string, unknown>;
+  const hand = viewer === "corp" ? side["hq"] : side["grip"];
+  if (!Array.isArray(hand)) return null;
+  const titles = hand.map((c) => (c && typeof c === "object" && "title" in c ? String(c.title) : "hidden card"));
+  return `Your ${viewer === "corp" ? "HQ" : "grip"}: ${titles.length ? titles.join(", ") : "empty"}`;
+}
+
+/** Compact view: header, status line, the seat's hand, the recent public
+ *  log and the options; the full state stays one get_state call away. */
+export function buildCompactDecisionMessage(request: PageDecisionRequest): string {
+  const log = Array.isArray(request.state["log"]) ? (request.state["log"] as string[]).slice(-12) : [];
+  const hand = handLine(request.state);
+  return [
+    decisionHeader(request),
+    statusLine(request.state),
+    ...(hand ? [hand] : []),
+    "",
+    "RECENT LOG:",
+    ...log.map((l) => `  ${l}`),
+    "",
+    ...multiSelectLine(request),
+    "LEGAL OPTIONS:",
+    ...request.options.map((o, i) => `${i}: ${JSON.stringify(o)}`),
+    "",
+    `Choose one option index (0-${request.options.length - 1}) via the choose_option tool.`,
+  ].join("\n");
+}
+
+/** The "lean" history variant: what a PAST decision's user turn keeps
  *  in the transcript — header + options, no state, no log tail. The
  *  decision as SENT always carries the fresh state (buildDecisionMessage);
  *  under lean, only this reduced form persists, so past board positions
@@ -507,23 +576,21 @@ export function buildLeanDecisionMessage(request: PageDecisionRequest): string {
   ].join("\n");
 }
 
-/** Postgame debrief instrument (D07). Fixed, versioned wording — changing
- *  it forks comparability across games/models, so any edit bumps the
- *  version. Neutral and open-ended. Q5 is the harness-feedback channel
- *  ("models dictate their harness"): answers feed the design-review
- *  queue, never the model. Zero-contamination by construction: sent as a
- *  separate call after the game; the reply enters no transcript.
+/** Postgame debrief instrument. Fixed, versioned wording — changing it
+ *  forks comparability across games/models, so any edit bumps the
+ *  version. Neutral and open-ended. Q5 is the harness-feedback channel:
+ *  answers go to the harness designers, never back to the model.
+ *  Zero-contamination by construction: sent as a separate call after the
+ *  game; the reply enters no transcript.
  *
- *  Rev 2 (game-3 finding): the prompt now opens with a terminal
- *  catch-up — the public log lines since the model's last API-delivered
- *  decision, exactly what the next decision message would have carried
- *  had one arrived. Without it, every event after the last real
- *  decision is invisible (auto-resolve widens this to whole terminal
- *  chains: game 3's model never saw its fatal access and reported the
- *  ending as an interface bug). The result is then stated plainly
- *  ("you won/lost (reason)") — verdict-blind debriefing is parked as a
- *  Phase-2 experiment. The model's IN-GAME epistemic state remains
- *  measurable where it always lived: the decision records. */
+ *  The prompt opens with a terminal catch-up — the public log lines since
+ *  the model's last API-delivered decision, exactly what the next
+ *  decision message would have carried had one arrived. Without it, every
+ *  event after the last real decision is invisible (auto-resolve widens
+ *  this to whole terminal chains: a model can miss its own fatal access
+ *  and blame the interface). The result is then stated plainly ("you
+ *  won/lost (reason)"). The model's IN-GAME epistemic state stays
+ *  measurable in the decision records. */
 export const DEBRIEF_INSTRUMENT_VERSION = 2;
 
 export function buildDebriefPrompt(
@@ -555,7 +622,7 @@ export function buildDebriefPrompt(
   ].join("\n");
 }
 
-/** Compaction trigger (D01): the harness supplies the trigger and the empty
+/** Compaction trigger: the harness supplies the trigger and the empty
  *  page; every remembered word is the model's own. */
 export function buildCompactionNotice(keepTurns: number): string {
   return (

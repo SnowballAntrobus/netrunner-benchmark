@@ -1,4 +1,4 @@
-// Game model for the board viewer (D15) — pure data, no DOM, ES module.
+// Game model for the board viewer — pure data, no DOM, ES module.
 //
 // One implementation shared by the browser viewer (recorded bundles and the
 // live stream) and the Node exporter (`cli.ts site`), which writes the same
@@ -285,7 +285,10 @@ export function metaFromRecord(record) {
   const seats = {};
   if (record.seats && Object.keys(record.seats).length) {
     for (const s of ["corp", "runner"]) {
-      if (record.seats[s]) seats[s] = { model: record.seats[s].model };
+      if (record.seats[s]) {
+        const { model, driver, client } = record.seats[s];
+        seats[s] = { model, driver: driver || "api", client: client || null };
+      }
     }
   } else {
     seats.runner = { model: record.model };
@@ -307,6 +310,7 @@ export function metaFromRecord(record) {
     cardSets: record.cardSets || [],
     actions: record.actions || null,
     contextMode: record.contextMode || null,
+    decisionView: record.decisionView || null,
     durationMs: record.durationMs ?? null,
   };
 }

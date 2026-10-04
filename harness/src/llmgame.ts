@@ -1,12 +1,11 @@
-/** LLM-seat game runner (PHASE1 M4; seat-general since D14): a model (or the
- *  mock) in the Runner seat, the Corp seat, or both, against the rules AI
- *  in any seat left over. Reuses the M1 infrastructure; adds the decision
+/** LLM-seat game runner: a model (or the mock) in the Runner seat, the
+ *  Corp seat, or both, against the rules AI in any seat left over. Reuses
+ *  the headless-game plumbing (game.ts, server.ts); adds the decision
  *  bridge (page.exposeFunction) and the per-decision JSONL log — every
  *  record carries the engine's ReproductionCode, so every decision is a
  *  resumable position. Each LLM seat owns its own client, system prompt,
  *  transcript and counters; the two seats never share context. */
 import { appendFile, mkdir, writeFile } from "node:fs/promises";
-import { spawn } from "node:child_process";
 import { join } from "node:path";
 import { launchBrowser, type GameRecord } from "./game.js";
 import { startServer } from "./server.js";
@@ -15,6 +14,7 @@ import { loadCardData, deckReference } from "./carddata.js";
 import { requiredSets, setsParam } from "./cardpool.js";
 import {
   buildSystemPrompt,
+  buildCompactDecisionMessage,
   buildDecisionMessage,
   buildLeanDecisionMessage,
   buildCompactionNotice,
@@ -34,14 +34,14 @@ import {
 } from "./llm.js";
 import { loadOfficialRules } from "./rules.js";
 
-/** Which seats are played by a model (D14). */
+/** Which seats are played by a model. */
 export type SeatMode = "runner" | "corp" | "both";
 
 export function llmSeatsOf(mode: SeatMode): Seat[] {
   return mode === "both" ? ["corp", "runner"] : [mode];
 }
 
-/** Events streamed to the live viewer while a game runs (D15). */
+/** Events streamed to the live viewer while a game runs. */
 export type LiveEvent =
   | { type: "meta"; meta: Record<string, unknown> }
   | { type: "decision"; record: DecisionRecord }
@@ -50,12 +50,25 @@ export type LiveEvent =
   /** `more`: another game of the same match follows (run-match). */
   | { type: "end"; record: LLMGameRecord; more?: boolean };
 
+export type ContextMode = "conversational" | "stateless" | "client";
+
+/** Thrown by a client whose player gave up (MCP resign): the game ends
+ *  with status "resigned" instead of continuing on fallback choices. */
+export class PlayerResigned extends Error {}
+export type DecisionView = "full" | "compact";
+
+export interface SeatDriver {
+  driver: "api" | "mcp";
+  /** The MCP client's self-reported name and version. */
+  client?: { name: string; version: string } | null;
+}
+
 export interface LLMGameOptions {
   repoRoot: string;
   seed: number;
   corpPrecon: string;
   runnerPrecon: string;
-  /** D14: which seats a model plays (default "runner"). */
+  /** Which seats a model plays (default "runner"). */
   seat?: SeatMode;
   /** The model for a single LLM seat — and for both seats unless
    *  corpModel/runnerModel say otherwise. "mock", an Anthropic model id,
@@ -69,65 +82,74 @@ export interface LLMGameOptions {
   outDir: string;
   timeoutMs?: number;
   stallMs?: number;
-  /** D01: "conversational" (default) keeps the whole game in one running
-   *  conversation per seat; "stateless" is the game-1 ablation arm. */
-  contextMode?: "conversational" | "stateless";
-  /** D01 axis 1: what a PAST turn keeps in the transcript. "full" (default,
-   *  variant A) = the complete decision message; "lean" (variant B) =
-   *  header + options only. */
+  /** "conversational" (default) keeps the whole game in one running
+   *  conversation per seat; "stateless" sends each decision on its own;
+   *  "client" leaves the conversation to the client (MCP: the chat app
+   *  holds the history, the harness keeps none and never compacts). */
+  contextMode?: ContextMode;
+  /** "full" (default) sends the state JSON with every decision; "compact"
+   *  sends a status line, the recent log and the options, with the full
+   *  state available on request (MCP get_state). */
+  decisionView?: DecisionView;
+  /** Per-seat provenance: how decisions reached the game (API or MCP) and,
+   *  for MCP, the client app that answered. Default: API. */
+  seatDrivers?: Partial<Record<Seat, SeatDriver>>;
+  /** True while a decision waits on a player outside the harness (MCP):
+   *  the stall check pauses, since waiting on a person is not a hang. */
+  awaitingClient?: () => boolean;
+  /** Each seat's system prompt, as soon as it is built (MCP join). */
+  onSystemPrompt?: (seat: Seat, text: string) => void;
+  /** Every decision put to a model seat, before it is asked (MCP get_state). */
+  onModelDecision?: (seat: Seat, request: PageDecisionRequest) => void;
+  /** What a PAST turn keeps in the transcript: "full" (default) = the
+   *  complete decision message; "lean" = header + options only. */
   historyVariant?: "full" | "lean";
   /** Compact when the observed request size crosses this (tokens). A
    *  PER-MODEL tuning knob: pick ~70–80% of the model's context window,
-   *  floored by post-compaction baseline + epoch headroom (see
-   *  PROMPTING.md "Choosing the threshold"). Default 150K for
-   *  200K-window models (haiku) — matches Anthropic's own API compaction
-   *  trigger default and the practitioner quality band. Per-seat values
-   *  in `compactionThresholds` win (two-model games). */
+   *  but well above the post-compaction floor (system + summary + kept
+   *  exchanges), or compactions thrash. Default 150K for 200K-window
+   *  models (haiku) — matches Anthropic's own API compaction trigger
+   *  default and the practitioner quality band. Per-seat values in
+   *  `compactionThresholds` win (two-model games). */
   compactionThreshold?: number;
   compactionThresholds?: Partial<Record<Seat, number>>;
-  /** D03: auto-resolve single-option decisions at the page layer (logged
-   *  as forced, no API call, no transcript entry). Default true; false is
-   *  the game-1-interface comparison arm. */
+  /** Auto-resolve single-option decisions at the page layer (logged as
+   *  forced, no API call, no transcript entry). Default true; false is
+   *  the comparison arm that asks the model anyway. */
   autoResolve?: boolean;
-  /** D07: postgame debrief — one extra call per LLM seat on its final
+  /** Postgame debrief — one extra call per LLM seat on its final
    *  transcript, answers written to debrief.json. Default true; no-op in
    *  stateless mode (no transcript) and on non-completed games. */
   debrief?: boolean;
-  /** D09: "compound" (default) fuses subject-carrying commands into
-   *  complete actions, page-fulfilling the follow-up select; "split" is
-   *  the games-1/2 two-step comparison arm. */
+  /** "compound" (default) fuses subject-carrying commands into complete
+   *  actions, page-fulfilling the follow-up select; "split" is the
+   *  two-step comparison arm (command, then its follow-up select). */
   actions?: "compound" | "split";
-  /** D14: "neutral" (default) makes card code treat LLM seats as human so
-   *  rules-AI branches can't prune their menus; "rules" restores era 3. */
+  /** "neutral" (default) makes card code treat LLM seats as human so rules-AI
+   *  branches can't prune their menus; "rules" (ablation) lets them. */
   aiBranches?: "neutral" | "rules";
   /** Live progress line on stdout while the game runs: current turn,
    *  agenda points, decision count. In-place (\r) on a TTY; one line per
    *  turn change otherwise. Default false — keeps CI logs and scripted
    *  runs clean. */
   progress?: boolean;
-  /** Open a second terminal window streaming the model's reasoning live
-   *  (tail -f on the decision JSONL piped through jq — the same view
-   *  used to watch games 1/2 by hand). macOS opens Terminal.app;
-   *  Linux tries common emulators; either way the exact pipeline is
-   *  printed so it can be pasted manually. Default false. */
-  watch?: boolean;
   /** Exchanges kept verbatim through a compaction reset. */
   compactionKeepTurns?: number;
-  /** D15: viewer frames (board snapshots) — written to frames.jsonl and
+  /** Viewer frames (board snapshots) — written to frames.jsonl and
    *  streamed with the decisions. Default true. */
   frames?: boolean;
-  /** D15: live event sink (the live viewer server subscribes here). */
+  /** Live event sink (the live viewer server subscribes here). */
   onEvent?: (event: LiveEvent) => void;
   /** Appended verbatim to the harness URL — e.g. "&invariant=1" runs the
-   *  no-cheating checker at every decision (D14: LLM menus included). */
+   *  no-cheating checker at every decision (LLM menus included). */
   extraParams?: string;
-  /** Override the per-seat client (D15 replay re-simulation, salted mock
+  /** Override the per-seat client (replay re-simulation, salted mock
    *  reruns in run-match). Returning undefined keeps the default client. */
   clientFactory?: (seat: Seat, model: string) => ChoiceClient | undefined;
 }
 
 export interface DecisionRecord {
-  record_type?: "decision"; // absent in game-1 records; readers tolerate both
+  record_type?: "decision"; // absent in old records; readers tolerate both
   game_id: string;
   seq: number;
   log_index: number | null; // capturedLog.length at capture time (exact ordering)
@@ -148,13 +170,13 @@ export interface DecisionRecord {
   cache_read: number | null;
   latency_ms: number | null;
   reproduction_code: string | null;
-  /** D01: observed request size (system + transcript + decision) for this
-   *  decision; null for rules-AI records and stateless mode. */
+  /** Observed request size (system + transcript + decision) for this
+   *  decision; null for rules-AI records and outside conversational mode. */
   transcript_tokens: number | null;
-  /** D01: compaction epoch this decision was made in (0 = before the first
-   *  compaction); null when stateless. Per seat. */
+  /** Compaction epoch this decision was made in (0 = before the first
+   *  compaction); null outside conversational mode. Per seat. */
   compaction_id: number | null;
-  /** D05: set on a select decision whose menu differed from the preview
+  /** Set on a select decision whose menu differed from the preview
    *  attached to the chosen command — the "preview, not promise" cases,
    *  surfaced for analysis. Null otherwise. */
   preview_divergence: {
@@ -162,38 +184,37 @@ export interface DecisionRecord {
     previewed_at_seq: number;
     preview: unknown[];
   } | null;
-  /** D03: true = single-option decision auto-resolved at the page layer
+  /** True = single-option decision auto-resolved at the page layer
    *  (no API call, no transcript entry; model fields null). */
   forced: boolean;
-  /** D10: FAILED attempts in order, when retries occurred (null
-   *  otherwise, and on rules-AI/forced records). The accepted attempt
-   *  stays in raw_response. Closes the game-2 retry mystery with data. */
+  /** FAILED attempts in order, when retries occurred (null otherwise,
+   *  and on rules-AI/forced records). The accepted attempt stays in
+   *  raw_response. */
   failed_attempts: { raw: string; problem: string }[] | null;
-  /** D09: true on a command record whose options were the FUSED menu. */
+  /** True on a command record whose options were the FUSED menu. */
   compound: boolean;
-  /** D09: true on a select auto-answered from a prior compound choice
+  /** True on a select auto-answered from a prior compound choice
    *  (no API call, no transcript entry; model fields null). */
   compound_fulfilled: boolean;
-  /** D09-2: true on an access-order select folded by the structural
-   *  guard (order provably irrelevant; option 0 taken, no API call).
-   *  Absent on pre-D09-2 records. */
+  /** True on an access-order select folded by the structural guard
+   *  (order provably irrelevant; option 0 taken, no API call). Absent
+   *  otherwise. */
   order_folded?: boolean;
-  /** D09-2: set (to the fused menu length) on API decisions whose fused
-   *  menu reached the alert threshold (>= 40 entries) — unbounded by
-   *  review decision, but flagged for inspection. */
+  /** Set (to the fused menu length) on API decisions whose fused menu
+   *  reached the alert threshold (>= 40 entries) — unbounded by design,
+   *  but flagged for inspection. */
   large_menu?: number;
-  /** D14: set on each step of a card-by-card multi-select. */
+  /** Set on each step of a card-by-card multi-select. */
   multi_select?: { slot: number; of: number; chosen: unknown[] };
 }
 
-/** D01: compaction events are first-class records in the same JSONL stream —
+/** Compaction events are first-class records in the same JSONL stream —
  *  the summary text is the model's only memory of everything dropped, and
  *  the first place to look when a later confabulation needs tracing. */
 export interface CompactionRecord {
   record_type: "compaction";
   game_id: string;
-  /** D14: the seat whose transcript was compacted (absent before D14 =
-   *  runner). */
+  /** The seat whose transcript was compacted (absent = runner). */
   seat?: Seat;
   compaction_id: number; // 1-based, per seat
   seq_before: number; // seq of the decision whose arrival triggered it
@@ -212,12 +233,16 @@ export interface CompactionRecord {
   latency_ms: number;
 }
 
-/** D14: per-seat counters — the top-level LLMGameRecord counters are their
+/** Per-seat counters — the top-level LLMGameRecord counters are their
  *  sums (identical to the one seat's for single-seat games). */
 export interface SeatStats {
   seat: Seat;
   model: string;
-  compactionThreshold: number | null; // null when stateless
+  /** "api": the harness called the model (or the mock); "mcp": a chat
+   *  app answered through the MCP server (no token usage or cost). */
+  driver: "api" | "mcp";
+  client: { name: string; version: string } | null;
+  compactionThreshold: number | null; // null outside conversational mode
   llmDecisions: number;
   compoundFulfilled: number;
   orderFolded: number;
@@ -240,13 +265,12 @@ export interface LLMGameRecord extends GameRecord {
   /** Single seat: that seat's model. Both seats: "<corp> vs <runner>"
    *  (a display label — per-seat models live in `seats`). */
   model: string;
-  /** D14: which seats a model played (absent before D14 = "runner"). */
+  /** Which seats a model played (absent = "runner"). */
   llmSeat: SeatMode;
   seats: Partial<Record<Seat, SeatStats>>;
-  /** D14: rules-AI branch policy for LLM seats (absent before D14 = the
-   *  era-3 behavior, "rules"). */
+  /** Rules-AI branch policy for LLM seats (absent = "rules"). */
   aiBranches: "neutral" | "rules";
-  /** D14: card-by-card multi-select prompts and neutralized player.AI
+  /** Card-by-card multi-select prompts and neutralized player.AI
    *  reads (page counters). */
   multiSelects: number;
   neutralizedReads: number;
@@ -255,19 +279,21 @@ export interface LLMGameRecord extends GameRecord {
   rulesSource: string;
   promptProfile: string;
   reasoningStyle: string;
-  contextMode: "conversational" | "stateless";
-  historyVariant: "full" | "lean" | null; // null when stateless
+  contextMode: ContextMode;
+  /** How decisions were presented (absent before compact view = full). */
+  decisionView: DecisionView;
+  historyVariant: "full" | "lean" | null; // null outside conversational mode
   autoResolve: boolean;
-  debrief: boolean; // D07 flag as configured (artifact presence: debriefPath)
-  actions: "compound" | "split"; // D09
+  debrief: boolean; // flag as configured (artifact presence: debriefPath)
+  actions: "compound" | "split";
   llmDecisions: number; // API-answered decisions
-  compoundFulfilled: number; // D09 page-fulfilled selects (no API call)
-  orderFolded: number; // D09-2 access-order folds (no API call)
-  largeFusedMenus: number; // D09-2 fused menus at/over the alert threshold
-  forcedDecisions: number; // D03 auto-resolved (no API call)
+  compoundFulfilled: number; // page-fulfilled selects (no API call)
+  orderFolded: number; // access-order folds (no API call)
+  largeFusedMenus: number; // fused menus at/over the alert threshold
+  forcedDecisions: number; // auto-resolved (no API call)
   rulesDecisions: number;
   retriesTotal: number;
-  /** D13: transient HTTP failures (429/5xx/network) survived via the
+  /** Transient HTTP failures (429/5xx/network) survived via the
    *  client's backoff ladder — gateway path only; the Anthropic SDK
    *  retries invisibly and reports 0 here. */
   httpRetries: number;
@@ -278,20 +304,20 @@ export interface LLMGameRecord extends GameRecord {
    *  (system + summary + kept exchanges) for this model/config. */
   compactionsSuppressed: number;
   transcriptTokensMax: number;
-  /** D05: previews followed into their select (comparisons made) and how
+  /** Previews followed into their select (comparisons made) and how
    *  many diverged. Divergent selects carry `preview_divergence`. */
   previewChecks: number;
   previewDivergences: number;
-  /** D07: path of the debrief artifact, or null (flag off, stateless,
+  /** Path of the debrief artifact, or null (flag off, stateless,
    *  non-completed game, or the debrief call failed). */
   debriefPath: string | null;
   usage: Usage;
-  /** D13: accumulated provider-billed cost (OpenRouter usage.cost) in
+  /** Accumulated provider-billed cost (OpenRouter usage.cost) in
    *  USD; null for direct Anthropic and mock. The corpus report prefers
    *  this over price-table estimates. */
   reportedCostUsd: number | null;
   decisionLogPath: string;
-  /** D15: viewer frames (null when disabled). */
+  /** Viewer frames (null when disabled). */
   framesPath: string | null;
   invalidRecords: number;
 }
@@ -314,8 +340,8 @@ export function validateDecisionRecord(
     problems.push(`choice ${r.choice} out of range`);
   const llmSeat = llmSeats.has(r.seat);
   if (llmSeat && r.state === null) problems.push(`${r.seat} record missing state`);
-  // Forced (D03), compound-fulfilled (D09) and order-folded (D09-2)
-  // records never touched the model — model fields are null.
+  // Forced, compound-fulfilled and order-folded records never touched
+  // the model — model fields are null.
   if (llmSeat && r.model === null && !r.forced && !r.compound_fulfilled && !r.order_folded)
     problems.push(`${r.seat} record missing model`);
   if (r.forced && r.options.length !== 1)
@@ -323,55 +349,7 @@ export function validateDecisionRecord(
   return problems;
 }
 
-/** --watch: open a second terminal streaming the model's reasoning as it
- *  lands in the decision JSONL — the tail|jq view used to follow games
- *  1/2 by hand, now spawned automatically. Decision records print as
- *  "#seq seat · phase" + reasoning; compaction records print their
- *  summary (the model's memory of the dropped past). Forced/fulfilled/
- *  rules-AI records carry no reasoning and are skipped by the filter.
- *  Best-effort: the pipeline is always printed for manual pasting, and a
- *  failed spawn (headless box, no known emulator) is silently ignored. */
-function openReasoningWatch(decisionLogPath: string): void {
-  const jqProg =
-    'fromjson? | if .record_type == "compaction" then ' +
-    '"\\n═══ compaction #\\(.compaction_id) (\\(.seat // "runner")): \\(.dropped_turns) exchanges → summary ═══\\n\\(.summary)\\n" ' +
-    'elif .reasoning != null then ' +
-    '"── #\\(.seq) \\(.seat) · \\(.phase.title // "?") ──\\n\\(.reasoning)\\n" ' +
-    "else empty end";
-  const shellCmd = `tail -n +1 -f "${decisionLogPath}" | jq -Rr '${jqProg}'`;
-  console.log(`watch: ${shellCmd}`);
-  const ignore = { stdio: "ignore" as const, detached: true };
-  try {
-    if (process.platform === "darwin") {
-      // AppleScript string: escape backslashes and double quotes.
-      const script =
-        'tell application "Terminal" to do script "' +
-        shellCmd.replace(/([\\"])/g, "\\$1") +
-        '"';
-      spawn("osascript", ["-e", script], ignore).unref();
-    } else {
-      // Linux best-effort: first emulator that spawns wins; args passed
-      // without a shell so no nested quoting.
-      const candidates: [string, string[]][] = [
-        ["gnome-terminal", ["--", "bash", "-c", shellCmd]],
-        ["konsole", ["-e", "bash", "-c", shellCmd]],
-        ["xterm", ["-e", "bash", "-c", shellCmd]],
-      ];
-      const tryNext = (i: number): void => {
-        const candidate = candidates[i];
-        if (!candidate) return;
-        const child = spawn(candidate[0], candidate[1], ignore);
-        child.on("error", () => tryNext(i + 1));
-        child.unref();
-      };
-      tryNext(0);
-    }
-  } catch {
-    /* watch is a convenience — the printed pipeline is the fallback */
-  }
-}
-
-/** Game id: unchanged for Runner-seat games (corpus continuity), seat-
+/** Game id: untagged for Runner-seat games (corpus continuity), seat-
  *  tagged otherwise. Corp first in two-model ids, as in "Corp vs Runner". */
 export function gameIdFor(
   mode: SeatMode,
@@ -392,8 +370,8 @@ interface SeatContext {
   system: string;
   transcript: Transcript | null;
   stats: SeatStats;
-  /** D07 rev 2: capturedLog index of this seat's last API-delivered
-   *  decision — its debrief catch-up covers everything after it. */
+  /** capturedLog index of this seat's last API-delivered decision —
+   *  its debrief catch-up covers everything after it. */
   lastApiLogIndex: number;
 }
 
@@ -418,6 +396,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
   const timeoutMs = options.timeoutMs ?? 7_200_000;
   const stallMs = options.stallMs ?? 300_000;
   const contextMode = options.contextMode ?? "conversational";
+  const decisionView = options.decisionView ?? "full";
   const historyVariant = options.historyVariant ?? "full";
   const compactionKeepTurns = options.compactionKeepTurns ?? 20;
   const autoResolve = options.autoResolve ?? true;
@@ -425,7 +404,6 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
   const actions = options.actions ?? "compound";
   const aiBranches = options.aiBranches ?? "neutral";
   const progress = options.progress ?? false;
-  const watch = options.watch ?? false;
   const framesOn = options.frames ?? true;
   const emit = (event: LiveEvent): void => {
     try {
@@ -456,10 +434,10 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
   if (!profileBase) throw new Error(`unknown prompt profile: ${options.profile}`);
   const profile: PromptProfile = { ...profileBase, reasoningStyle: options.reasoningStyle };
 
-  // D06-1 rev 2: one folder per run — every artifact for this game lives
-  // in out/<gameId>/ under canonical names (src/paths.ts resolves both
-  // this and the legacy flat layout). Two-model games write one system
-  // prompt per seat (system-prompt.<seat>.txt).
+  // One folder per run — every artifact for this game lives in
+  // out/<gameId>/ under canonical names (src/paths.ts resolves them).
+  // Two-model games write one system prompt per seat
+  // (system-prompt.<seat>.txt).
   const runDir = join(outDir, gameId);
   await mkdir(runDir, { recursive: true });
   const decisionLogPath = join(runDir, "decisions.jsonl");
@@ -486,6 +464,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
       rulesText,
       profile,
       contextMode,
+      decisionView,
       actionsMode: actions,
       seat,
       opponent: mode === "both" ? "model" : "rules",
@@ -496,6 +475,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
       mode === "both" ? `system-prompt.${seat}.txt` : "system-prompt.txt"
     );
     await writeFile(systemPromptPath, system);
+    options.onSystemPrompt?.(seat, system);
     const threshold =
       options.compactionThresholds?.[seat] ?? options.compactionThreshold ?? 150_000;
     contexts[seat] = {
@@ -518,6 +498,8 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
       stats: {
         seat,
         model,
+        driver: options.seatDrivers?.[seat]?.driver ?? "api",
+        client: options.seatDrivers?.[seat]?.client ?? null,
         compactionThreshold: contextMode === "conversational" ? threshold : null,
         llmDecisions: 0,
         compoundFulfilled: 0,
@@ -538,7 +520,6 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
       },
     };
   }
-  if (watch) openReasoningWatch(decisionLogPath);
 
   const record: LLMGameRecord = {
     seed,
@@ -566,6 +547,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
     promptProfile: options.profile,
     reasoningStyle: options.reasoningStyle,
     contextMode,
+    decisionView,
     historyVariant: contextMode === "conversational" ? historyVariant : null,
     autoResolve,
     debrief,
@@ -600,6 +582,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
       runnerPrecon,
       llmSeat: mode,
       models,
+      drivers: options.seatDrivers ?? {},
       corpDeck,
       runnerDeck,
       cardSets,
@@ -609,9 +592,9 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
 
   // Appends are serialized through a promise chain: concurrent bridge
   // calls (e.g. back-to-back rules-AI decisions) otherwise race appendFile
-  // and adjacent records land in nondeterministic file order — surfaced by
-  // D04's double-run comparison. Record ORDER in the file now matches
-  // write order deterministically.
+  // and adjacent records land in nondeterministic file order, so two runs
+  // of one seed would differ. Record ORDER in the file matches write
+  // order deterministically.
   let writeQueue: Promise<void> = Promise.resolve();
   const appendRecord = (json: string): Promise<void> => {
     writeQueue = writeQueue.then(() => appendFile(decisionLogPath, json + "\n"));
@@ -634,11 +617,11 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
   const page = await context.newPage();
   // Set when the API is unusable (bad key, quota, network): the game must
   // ABORT, not degrade into option-0 fallback play — a game played by
-  // fallbacks is worthless data. (Found via fake-key probe: 460 silent
-  // bridge failures produced a "completed" game.)
+  // fallbacks is worthless data, yet would still end "completed".
   let apiAborted = false;
+  let resigned = false;
 
-  // D15: one board snapshot per decision (both seats) for the viewer —
+  // One board snapshot per decision (both seats) for the viewer —
   // omniscient, so never shown to a model; written to frames.jsonl.
   let framesQueue: Promise<void> = Promise.resolve();
   const recordFrame = async (frame: Record<string, unknown>): Promise<void> => {
@@ -719,9 +702,9 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
       };
       if (request.multiSelect) stats.multiSelectSteps++;
 
-      // D09 fulfillment path: the model already chose this subject at the
-      // fused command; record and answer the matched index. No API call,
-      // no transcript entry.
+      // Compound fulfillment path: the model already chose this subject
+      // at the fused command; record and answer the matched index. No API
+      // call, no transcript entry.
       if (request.compoundFulfilled) {
         stats.compoundFulfilled++;
         await writeDecision({
@@ -734,9 +717,9 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
         return JSON.stringify({ option: request.compoundChoice ?? 0 });
       }
 
-      // D09-2 class (c): access-order fold — the page proved (structural
-      // guard, pool-audited) that order cannot matter; option 0 taken,
-      // full record, no API call.
+      // Access-order fold — the page proved (structural guard,
+      // pool-audited) that order cannot matter; option 0 taken, full
+      // record, no API call.
       if (request.orderFolded) {
         stats.orderFolded++;
         await writeDecision({
@@ -750,7 +733,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
         return JSON.stringify({ option: 0 });
       }
 
-      // D03 forced path: single-option decision auto-resolved — full
+      // Forced path: single-option decision auto-resolved — full
       // record (state, options, divergence marker), no API call, no
       // transcript entry. Index 0 is the only possible outcome.
       if (request.forced) {
@@ -772,13 +755,13 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
           `⚠ fused menu of ${request.largeMenu} entries at seq ${request.seq} — unbounded by design, inspect if frequent`
         );
       }
-      // D07 rev 2: remember how far the model's view of the log reached.
+      // Remember how far the model's view of the log reached.
       // Everything past this index at game end was never delivered (no
       // later API decision arrived to carry it) — the debrief's terminal
       // catch-up starts here.
       ctx.lastApiLogIndex = logIndex ?? ctx.lastApiLogIndex;
 
-      // D01 compaction: checked BEFORE the decision, on the request size
+      // Compaction: checked BEFORE the decision, on the request size
       // observed at the PREVIOUS decision (threshold < window leaves
       // headroom). The model writes its own summary; the transcript
       // restarts as [notice] + [summary] + [last K exchanges verbatim].
@@ -823,7 +806,9 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
         }
       }
 
-      const decisionMessage = buildDecisionMessage(request);
+      options.onModelDecision?.(ctx.seat, request);
+      const decisionMessage =
+        decisionView === "compact" ? buildCompactDecisionMessage(request) : buildDecisionMessage(request);
       let result;
       try {
         result = await decideWithRetries(
@@ -837,9 +822,12 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
         );
       } catch (e) {
         apiAborted = true;
-        record.errors.push(
-          `API failure at ${ctx.seat} decision ${request.seq}: ${String(e)}`
-        );
+        if (e instanceof PlayerResigned) {
+          resigned = true;
+          record.errors.push(`${ctx.seat} resigned at decision ${request.seq}`);
+        } else {
+          record.errors.push(`API failure at ${ctx.seat} decision ${request.seq}: ${String(e)}`);
+        }
         return JSON.stringify({ option: 0, abort: true });
       }
       if (transcript) {
@@ -923,7 +911,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
       });
     });
 
-    // D14: a lone LLM Corp views the page as the Corp (labels and log
+    // A lone LLM Corp views the page as the Corp (labels and log
     // narration from its side); any game with an LLM Runner renders as
     // the Runner, keeping the shared narration Runner-honest.
     const viewSide = mode === "corp" ? "c" : "r";
@@ -1031,7 +1019,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
         lastProgressLine = line;
       }
       if (apiAborted) {
-        record.status = "crashed";
+        record.status = resigned ? "resigned" : "crashed";
         record.turns = surface.turnCounts;
         record.decisions = surface.decisions;
         record.errors.push(...surface.errors);
@@ -1055,6 +1043,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
         record.errors.push(...surface.errors);
         break;
       }
+      if (options.awaitingClient?.()) lastProgressAt = Date.now();
       if (Date.now() - lastProgressAt > stallMs) {
         record.status = "stalled";
         record.turns = surface.turnCounts;
@@ -1065,9 +1054,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
     if (progress && process.stdout.isTTY && lastProgressLine) {
-      // Finalize (don't clear): the last progress line stays in scrollback
-      // as evidence of the run's shape — with --watch stealing window
-      // focus, a cleared line looked like the feature never ran.
+      // Finalize (don't clear): the last progress line stays in scrollback.
       process.stdout.write("\r" + lastProgressLine.padEnd(64) + "\n");
     }
 
@@ -1121,70 +1108,71 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
     await captureFrame(record.decisions + 1, record.log.length);
     await framesQueue;
 
-    // D07 postgame debrief: one extra call per LLM seat on its final
-    // (as-compacted) transcript. Rev 2: opens with the terminal catch-up
+    // Postgame debrief: one extra call per LLM seat on its final
+    // (as-compacted) transcript. It opens with the terminal catch-up
     // (public log since that seat's last API decision) and states the
-    // result plainly — verdict-blind debriefing is parked as a Phase-2
-    // experiment. The reply enters no transcript and no future call:
+    // result plainly, since the engine's log does not always announce
+    // it. The reply enters no transcript and no future call:
     // zero-contamination by construction. No-op for stateless games and
     // non-completed games.
     const debriefs: Record<string, unknown>[] = [];
-    if (debrief && contextMode === "conversational" && record.status === "completed" && !apiAborted) {
-      for (const seat of llmSeats) {
-        const ctx = contexts[seat]!;
-        if (!ctx.transcript) continue;
-        try {
-          // D07 rev 2: terminal catch-up — the public log since the seat's
-          // last API-delivered decision, from the page's own public filter
-          // (exactly what a next decision message would have carried).
-          let finalEvents: string[] = [];
+    const debriefable = contextMode === "conversational" || contextMode === "client";
+    if (debrief && debriefable && record.status === "completed" && !apiAborted) {
+      // All seats at once, in seat order in the artifact: in a two-player
+      // MCP game one player's answer must not wait on the other's.
+      const answers = await Promise.all(
+        llmSeats.map(async (seat): Promise<Record<string, unknown> | null> => {
+          const ctx = contexts[seat]!;
           try {
-            finalEvents = (await page.evaluate(
-              (i) =>
-                (
-                  window as unknown as {
-                    __harness: { publicLogSince?: (i: number) => string[] };
-                  }
-                ).__harness.publicLogSince?.(i) ?? [],
-              ctx.lastApiLogIndex
-            )) as string[];
-          } catch {
-            /* page unavailable — debrief proceeds without catch-up */
+            // Terminal catch-up: the public log since the seat's last
+            // model-delivered decision (what a next decision would have shown).
+            let finalEvents: string[] = [];
+            try {
+              finalEvents = (await page.evaluate(
+                (i) =>
+                  (
+                    window as unknown as {
+                      __harness: { publicLogSince?: (i: number) => string[] };
+                    }
+                  ).__harness.publicLogSince?.(i) ?? [],
+                ctx.lastApiLogIndex
+              )) as string[];
+            } catch {
+              /* page unavailable: debrief proceeds without catch-up */
+            }
+            const debriefPrompt = buildDebriefPrompt(
+              finalEvents,
+              record.winner ? { won: record.winner === seat, reason: record.reason ?? "" } : undefined
+            );
+            const result = await ctx.client.summarize(ctx.system, [
+              ...(ctx.transcript ? ctx.transcript.messages() : []),
+              { role: "user", content: debriefPrompt },
+            ]);
+            addUsage(ctx.stats, result.usage);
+            ctx.stats.debriefed = true;
+            return {
+              game_id: gameId,
+              seat,
+              instrument_version: DEBRIEF_INSTRUMENT_VERSION,
+              final_events: finalEvents,
+              prompt: debriefPrompt,
+              text: result.text,
+              model: ctx.model,
+              tokens_in: result.usage.tokensIn,
+              tokens_out: result.usage.tokensOut,
+              cache_read: result.usage.cacheRead,
+              latency_ms: result.latencyMs,
+            };
+          } catch (e) {
+            record.errors.push(`${seat} debrief failed (game result unaffected): ${String(e)}`);
+            return null;
           }
-          const debriefPrompt = buildDebriefPrompt(
-            finalEvents,
-            record.winner
-              ? { won: record.winner === seat, reason: record.reason ?? "" }
-              : undefined
-          );
-          const result = await ctx.client.summarize(ctx.system, [
-            ...ctx.transcript.messages(),
-            { role: "user", content: debriefPrompt },
-          ]);
-          addUsage(ctx.stats, result.usage);
-          ctx.stats.debriefed = true;
-          debriefs.push({
-            game_id: gameId,
-            seat,
-            instrument_version: DEBRIEF_INSTRUMENT_VERSION,
-            final_events: finalEvents, // D07 rev 2: the terminal catch-up shown
-            prompt: debriefPrompt,
-            text: result.text,
-            model: ctx.model,
-            tokens_in: result.usage.tokensIn,
-            tokens_out: result.usage.tokensOut,
-            cache_read: result.usage.cacheRead,
-            latency_ms: result.latencyMs,
-          });
-        } catch (e) {
-          record.errors.push(
-            `${seat} debrief failed (game result unaffected): ${String(e)}`
-          );
-        }
-      }
+        })
+      );
+      for (const a of answers) if (a) debriefs.push(a);
       if (debriefs.length > 0) {
-        // One seat: the debrief object itself (the pre-D14 shape plus
-        // `seat`). Two seats: {game_id, seats: [...]}.
+        // One seat: the debrief object itself (with `seat`). Two seats:
+        // {game_id, seats: [...]}.
         const debriefPath = join(runDir, "debrief.json");
         await writeFile(
           debriefPath,
@@ -1208,7 +1196,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
         stats.httpRetries = ctx.client.httpRetries;
       record.seats[seat] = stats;
       // Top-level counters are sums over LLM seats (the one seat's own
-      // values in single-seat games, exactly as before D14).
+      // values in single-seat games).
       record.llmDecisions += stats.llmDecisions;
       record.compoundFulfilled += stats.compoundFulfilled;
       record.orderFolded += stats.orderFolded;

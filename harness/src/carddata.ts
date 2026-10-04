@@ -1,4 +1,4 @@
-/** Card reference builder (PHASE1 M4).
+/** Card reference builder.
  *
  *  Builds the static card-reference block for the system prompt from
  *  carddata/carddata.json (NetrunnerDB dump; codes match engine setNumbers

@@ -5,9 +5,7 @@
  *  stream (the LLM's choices and reasoning) into a readable markdown
  *  narrative, one section per turn.
  *
- *  One artifact per game: full.md — every decision with its full option
- *  menu (forced runs collapsed inline). The abbreviated report view was
- *  retired in the D06-1 corpus revision.
+ *  One artifact per game: full.md — every decision with its full menu.
  *
  *  Runner decisions are anchored into the narration via each record's
  *  state.log tail (its last public line located in the full log); corp
@@ -18,9 +16,9 @@ import { readFile, writeFile } from "node:fs/promises";
 import { resolveGameArtifacts } from "./paths.js";
 
 interface DecisionRow {
-  record_type?: string; // absent (game 1) or "decision" | "compaction"
+  record_type?: string; // absent (legacy records) or "decision" | "compaction"
   seq: number;
-  log_index?: number | null; // exact anchor (recorded from game 2 onward)
+  log_index?: number | null; // exact anchor (absent in legacy records)
   turn?: { side?: string; number?: number } | null;
   seat: string;
   decision_type: string;
@@ -33,10 +31,10 @@ interface DecisionRow {
   latency_ms: number | null;
   transcript_tokens?: number | null;
   preview_divergence?: { command: string; previewed_at_seq: number; preview: unknown[] } | null;
-  forced?: boolean; // D03: auto-resolved single-option decision (no API call)
-  compound?: boolean; // D09: options were the fused menu
-  compound_fulfilled?: boolean; // D09: select auto-answered from the fused choice
-  order_folded?: boolean; // D09-2: access-order fold (guarded auto-resolve)
+  forced?: boolean; // auto-resolved single-option decision (no API call)
+  compound?: boolean; // options were the fused menu
+  compound_fulfilled?: boolean; // select auto-answered from the fused choice
+  order_folded?: boolean; // access-order fold (guarded auto-resolve)
   state: {
     log?: string[];
     runner?: { credits?: number; grip?: unknown[]; clicks?: number; agendaPoints?: number };
@@ -46,7 +44,7 @@ interface DecisionRow {
 
 interface CompactionRow {
   record_type: "compaction";
-  seat?: string; // D14 (absent = runner)
+  seat?: string; // absent = runner
   compaction_id: number;
   seq_before: number;
   log_index?: number | null;
@@ -77,7 +75,7 @@ function optionLabel(o: unknown): string {
     (card["hidden"] ? "(hidden card)" : undefined) ??
     (d["text"] as string);
   bits.push(primary ?? `option ${d["index"]}`);
-  // D09: fused entries pair a verb with its subject (command + label/card) —
+  // Fused entries pair a verb with its subject (command + label/card) —
   // show the subject so "run Archives" and "run HQ" read distinctly.
   if (d["command"] && d["label"] && primary === d["command"]) {
     bits.push(String(d["label"]));
@@ -86,7 +84,7 @@ function optionLabel(o: unknown): string {
   }
   if (d["server"] && !d["label"]) bits.push(`→ ${d["server"]}`);
   if (d["description"] && primary !== d["description"]) bits.push(`— ${d["description"]}`);
-  // D05: command options carry a preview of the follow-up menu — render
+  // Command options can carry a preview of the follow-up menu — render
   // it compactly so the review shows what the model saw at the verb step.
   if (Array.isArray(d["choices"])) {
     bits.push(`→ (${(d["choices"] as unknown[]).map(optionLabel).join(", ")})`);
@@ -113,18 +111,6 @@ function decorate(line: string): string {
 }
 
 const PRIVATE_PREFIX = /^\s*(SPOILER:|AI:|RC:|ERROR:|DEBUG:|AI would have chosen:|\[)/;
-
-// Forced (single-option) decisions still carry model reasoning. Most is
-// boilerplate ("only one legal option, proceeding"), but run-phase thinking
-// is often the most valuable content in the game. Collapse only reasoning
-// that is recognizably boilerplate.
-const BOILERPLATE =
-  /only (one )?(legal )?option|single (legal )?option|must (select|choose|proceed)|proceed (with|to) the (turn|next|game)|no (other )?choice|I'?ll select it/i;
-
-function isBoilerplate(reasoning: string | null): boolean {
-  if (!reasoning || reasoning.trim() === "") return true;
-  return BOILERPLATE.test(reasoning) && reasoning.length < 260;
-}
 
 export async function formatGame(
   gamePath: string,
@@ -159,8 +145,8 @@ export async function formatGame(
   }
   const log = game.log.map((l) => String(l).replace(/\n+$/, "").trim());
 
-  // LLM-seat decisions anchor into the narration (D14: either seat, or
-  // both); rules-AI seats speak through their own "AI:" lines instead.
+  // LLM-seat decisions anchor into the narration (either seat, or both);
+  // rules-AI seats speak through their own "AI:" lines instead.
   const llmSeatMode = (game["llmSeat"] as string | undefined) ?? "runner";
   const llmSeats = new Set(llmSeatMode === "both" ? ["corp", "runner"] : [llmSeatMode]);
 
@@ -168,7 +154,7 @@ export async function formatGame(
   // Each runner record's state.log tail is the last ~30 PUBLIC lines at
   // decision time. Match its suffix against the public-filtered projection
   // of the full log (matching in the raw log fails: SPOILER/AI blocks sit
-  // between consecutive public lines — v1 fell back on 95% of decisions).
+  // between consecutive public lines, so nearly every decision would miss).
   const isPublicLine = (l: string): boolean =>
     l !== "" &&
     !/^\s*(SPOILER:|AI:|RC:|ERROR:|DEBUG:|AI would have chosen:|\[)/.test(l) &&
@@ -199,10 +185,9 @@ export async function formatGame(
     return t.number * 2 + (t.side === "runner" ? 1 : 0);
   };
 
-  // D06 polish: scoreboard turn headers. For each turn boundary, the first
-  // state-bearing runner record before the NEXT boundary supplies the turn
-  // number and agenda points. Legacy games (no log_index) fall back to
-  // plain headers.
+  // Scoreboard turn headers: each turn boundary's header shows the turn
+  // number and the agenda points from a state-bearing LLM-seat record
+  // before the NEXT boundary. Legacy games (no log_index) get no score.
   const headerInfo = new Map<number, { number: number | null; ap: string | null }>();
   {
     const withIdx = decisions
@@ -249,7 +234,7 @@ export async function formatGame(
   let lastAnchor = 0;
   const WINDOW = 400; // public lines of forward search
   for (const d of runnerDecisions) {
-    // Exact anchor recorded at capture time (games after #1): no guessing.
+    // Exact anchor recorded at capture time: no guessing.
     if (typeof d.log_index === "number") {
       const at = Math.min(Math.max(d.log_index, lastAnchor === 0 ? 0 : 0), log.length);
       lastAnchor = Math.max(lastAnchor, at);
@@ -302,11 +287,17 @@ export async function formatGame(
   // ---- render ------------------------------------------------------------
   const turns = game["turns"] as { corp: number; runner: number } | null;
   const usage = game["usage"] as Record<string, number> | undefined;
-  const seatModels = (game["seats"] ?? {}) as Record<string, { model?: string }>;
-  const who = (seat: string): string =>
-    llmSeats.has(seat)
-      ? (seatModels[seat]?.model ?? (game["model"] as string | undefined) ?? "model")
-      : "rules AI";
+  const seatModels = (game["seats"] ?? {}) as Record<
+    string,
+    { model?: string; driver?: string; client?: { name: string; version: string } | null }
+  >;
+  const who = (seat: string): string => {
+    if (!llmSeats.has(seat)) return "rules AI";
+    const s = seatModels[seat];
+    const model = s?.model ?? (game["model"] as string | undefined) ?? "model";
+    return s?.driver === "mcp" ? `${model}, over MCP${s.client ? ` from ${s.client.name}` : ""}` : model;
+  };
+  const mcpGame = Object.values(seatModels).some((s) => s.driver === "mcp");
   const header = [
     `# ${game["model"] ?? "faceoff"} — seed ${game["seed"]}: ${game["corpPrecon"]} (Corp: ${who("corp")}) vs ${game["runnerPrecon"]} (Runner: ${who("runner")})`,
     "",
@@ -321,8 +312,9 @@ export async function formatGame(
           ? `, context=${game["contextMode"]}` +
             (game["historyVariant"] ? `/${game["historyVariant"]}` : "")
           : "") +
+        (game["decisionView"] === "compact" ? ", view=compact" : "") +
         ` · **LLM decisions:** ${game["llmDecisions"]} (${game["retriesTotal"]} retries, ${game["fallbacks"]} fallbacks)` +
-        (usage
+        (usage && !mcpGame
           ? ` · **Tokens:** ${usage["tokensIn"]} in / ${usage["tokensOut"]} out / ${usage["cacheRead"]} cached`
           : "") +
         (typeof game["compactions"] === "number"
@@ -341,20 +333,20 @@ export async function formatGame(
 
   // Two-model games tag each decision with its seat.
   const seatTag = (d: DecisionRow): string => (llmSeats.size > 1 ? ` _${d.seat}_` : "");
-  const renderDecision = (d: DecisionRow, full: boolean): string[] => {
+  const renderDecision = (d: DecisionRow): string[] => {
     const forced = d.options.length === 1;
     const chosen = optionLabel(d.options[d.choice]);
     const meta: string[] = [];
     if (d.retries) meta.push(`${d.retries} retries`);
     if (d.fallback) meta.push("FALLBACK");
-    if (full && d.forced) meta.push("auto-resolved");
-    if (full && d.compound_fulfilled) meta.push("compound-fulfilled");
-    if (full && d.order_folded) meta.push("order-folded");
-    if (full && d.latency_ms) meta.push(`${(d.latency_ms / 1000).toFixed(1)}s`);
+    if (d.forced) meta.push("auto-resolved");
+    if (d.compound_fulfilled) meta.push("compound-fulfilled");
+    if (d.order_folded) meta.push("order-folded");
+    if (d.latency_ms) meta.push(`${(d.latency_ms / 1000).toFixed(1)}s`);
     const metaStr = meta.length ? ` _( ${meta.join(", ")} )_` : "";
     const lines: string[] = [];
-    // D05 "preview, not promise" cases — surfaced loudly in BOTH views so
-    // divergences can be pulled and analyzed.
+    // A preview is not a promise: divergences are surfaced loudly so they
+    // can be pulled and analyzed.
     if (d.preview_divergence) {
       lines.push(
         `> ⚠️ **Preview divergence** — this menu differs from the \`${d.preview_divergence.command}\` ` +
@@ -362,16 +354,10 @@ export async function formatGame(
           `(previewed: [${d.preview_divergence.preview.map(optionLabel).join(" | ")}])`
       );
     }
-    if (forced && !full) {
-      // Abbreviated view: substantive reasoning on a forced step surfaces
-      // as a compact thought line; boilerplate was collapsed by the caller.
-      lines.push(`> 💭 **#${d.seq}**${seatTag(d)} _${phaseName(d.phase)}:_ ${(d.reasoning ?? "").replace(/\n+/g, " ")}`, "");
-      return lines;
-    }
     // Reasoning FIRST, then the choice — mirroring both the temporal
     // truth (the model writes reasoning before choosing) and the corp's
     // thought→action presentation.
-    if (d.reasoning && (!forced || full)) {
+    if (d.reasoning) {
       lines.push(`> 💭 **#${d.seq}**${seatTag(d)} _${phaseName(d.phase)}:_ ${d.reasoning.replace(/\n+/g, " ")}`);
     }
     lines.push(
@@ -383,23 +369,15 @@ export async function formatGame(
     return lines;
   };
 
-  const render = (full: boolean): string => {
+  const render = (): string => {
     const out: string[] = [header, ""];
-    let forcedRun = 0;
-    const flushForced = (): void => {
-      if (forcedRun > 0 && !full) {
-        out.push(`> _· ${forcedRun} forced (single-option) decision${forcedRun > 1 ? "s" : ""} ·_`, "");
-        forcedRun = 0;
-      }
-    };
     for (let i = 0; i <= log.length; i++) {
-      // Compactions render before the decision that triggered them — in
-      // BOTH views: the summary is the model's entire memory of the
-      // compacted past, central to any review.
+      // Compactions render before the decision that triggered them: the
+      // summary is the model's entire memory of the compacted past,
+      // central to any review.
       const compactionsHere = compactionAt.get(i);
       if (compactionsHere) {
         for (const c of compactionsHere) {
-          flushForced();
           out.push(
             `> 🗜️ **Compaction #${c.compaction_id}**${llmSeats.size > 1 ? ` _${c.seat ?? "runner"}_` : ""} _(before decision #${c.seq_before}: ` +
               `~${c.transcript_tokens_before ?? "?"} tokens → summary + last ${c.kept_turns} ` +
@@ -410,27 +388,12 @@ export async function formatGame(
         }
       }
       const here = anchors.get(i);
-      if (here) {
-        for (const d of here) {
-          // Never collapse a divergent select — those are exactly the
-          // records the review wants to see.
-          if (
-            ((d.options.length === 1 && isBoilerplate(d.reasoning)) || d.compound_fulfilled || d.order_folded) &&
-            !full && !d.preview_divergence
-          ) {
-            forcedRun++;
-            continue;
-          }
-          flushForced();
-          out.push(...renderDecision(d, full));
-        }
-      }
+      if (here) for (const d of here) out.push(...renderDecision(d));
       if (i === log.length) break;
       const line = log[i]!;
       if (line === "") continue;
       let m: RegExpMatchArray | null;
       if ((m = line.match(/^SPOILER: At start of (Corp|Runner) turn:/))) {
-        flushForced();
         const who = m[1]!;
         const info = headerInfo.get(i);
         out.push(
@@ -452,23 +415,17 @@ export async function formatGame(
       }
       if (PRIVATE_PREFIX.test(line)) continue; // decklists, RC, banners
       if (/PixiJS/.test(line)) continue;
-      flushForced();
       out.push(decorate(line));
     }
-    flushForced();
     return out.join("\n") + "\n";
   };
 
-  // Since the D06-1 corpus revision only the FULL view is emitted — the
-  // abbreviated report view was retired (review happens in full.md + the
-  // replay viewer; the collapse machinery stays for the full view's
-  // forced-run folding).
-  return { full: render(true) };
+  return { full: render() };
 }
 
-// D07: debrief artifact(s) rendered at the end of the narrative. Resolved
-// through the artifact layout (nested run folder or legacy flat stem).
-// D14: two-model games carry one debrief per seat ({seats: [...]}).
+// Debrief artifact(s) rendered at the end of the narrative, read from the
+// run folder's debrief.json. Two-model games carry one debrief per seat
+// ({seats: [...]}).
 async function debriefSection(gamePath: string): Promise<string> {
   try {
     interface DebriefEntry {

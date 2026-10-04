@@ -1,5 +1,5 @@
-/** Conservation auditor (PHASE1 M4.5) — tier one of the rules-conformance
- *  "judge": deterministic, no LLM, no credits spent.
+/** Conservation auditor — tier one of the rules-conformance "judge":
+ *  deterministic, no LLM, no credits spent.
  *
  *  The engine logs omniscient ground truth at every turn boundary (the
  *  SPOILER lines: both players' credits, hand sizes, tags). This auditor
@@ -31,7 +31,7 @@ export interface AuditIssue {
   detail: string;
 }
 
-/** One step of the credit ledger, for the review-sample packet (D11).
+/** One step of the credit ledger, for the review-sample packet.
  *  Emitted by an optional observer — detection never depends on it. */
 export interface AuditTraceEvent {
   line: number;
@@ -215,7 +215,7 @@ export async function auditGameLog(
     if (/^(Corp|Runner) used (one|\d+) credits? from /.test(line)) continue; // card counters
 
     // ---- announcements whose credit effects are narrated separately -----
-    // (D16, extended pool; each verified against the card code.) Ability
+    // (Extended pool; each verified against the card code.) Ability
     // choices are announced as "<ability text> triggered" — the effects
     // log through GainCredits/LoseCredits/TakeCredits like any other.
     if (/ triggered$/.test(line)) continue;
@@ -300,7 +300,7 @@ export function reportAudit(results: AuditResult[]): number {
   return failures === 0 ? 0 : 1;
 }
 
-/** D11 manual-review assist: N seeded-random checked credit checkpoints,
+/** Manual-review assist: N seeded-random checked credit checkpoints,
  *  each with the log since that side's previous checkpoint, the
  *  auditor's arithmetic, and the engine's stated value — a packet a human
  *  can verify against the rulebook in minutes. */

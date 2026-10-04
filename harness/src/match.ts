@@ -1,4 +1,4 @@
-/** Match runner (D06 §1, D12): one configuration, many games.
+/** Match runner: one configuration, many games.
  *
  *  `run-match` plays N sequential `runLLMGame`s on seeds S..S+N-1 (or an
  *  explicit seed list), each optionally repeated K times on the SAME seed,
@@ -7,7 +7,7 @@
  *  artifacts are the ordinary run folders; the match adds match.json and
  *  match-summary.md.
  *
- *  Two variance questions (D12): across seeds (the game dealt) and within
+ *  Two variance questions: across seeds (the game dealt) and within
  *  a seed (nothing changed but sampling — the engine is deterministic
  *  under the seed, the model is not). The headline win rate therefore
  *  carries a standard error CLUSTERED BY SEED (Miller, "Adding Error Bars

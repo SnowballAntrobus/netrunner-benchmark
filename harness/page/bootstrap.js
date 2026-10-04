@@ -1,8 +1,8 @@
 /* Harness page bootstrap.
  *
- * Plain JS, no host-framework coupling (see PHASE1.md "Design constraints"):
- * everything the host needs crosses through window.__harness only, so this
- * file works identically under Playwright today or a jsdom host later.
+ * Plain JS, no host-framework coupling: everything the host needs crosses
+ * through window.__harness only, so this file does not care whether
+ * Playwright or another host (e.g. jsdom) drives the page.
  *
  * Loaded at the end of <body>, i.e. AFTER all engine scripts have executed
  * but BEFORE body onload fires Init(). That ordering is what lets us seed
@@ -89,8 +89,8 @@
   var turnCounts = { corp: 0, runner: 0 };
   window.__harness.turnCounts = turnCounts; // live reference
   // Forward ALL arguments — ChangePhase(src, skipInit); dropping skipInit
-  // makes DecisionPhase returns re-run Init forever (caught as a decision
-  // storm: 93k decisions, game never ends).
+  // makes DecisionPhase returns re-run Init forever (a decision storm; the
+  // game never ends).
   var engineChangePhase = ChangePhase;
   ChangePhase = function () {
     // Measure the log BEFORE the engine runs the transition: turn-begin
@@ -201,8 +201,8 @@
 
   // ---- Progress signal ----------------------------------------------------
   // Wrap both AIs' decision entry points to count decisions; the host uses
-  // this as a liveness signal for its stall watchdog. (Same two-method
-  // interface the LLMPlayer will implement in M4.)
+  // this as a liveness signal for its stall watchdog. (The LLMPlayer
+  // implements the same two-method interface.)
   function countDecisions(ai) {
     if (!ai || !ai.prototype) return;
     ["CommandChoice", "SelectChoice"].forEach(function (m) {

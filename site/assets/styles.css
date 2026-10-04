@@ -71,6 +71,7 @@ cite { font-style: normal; }
   border-radius: .5rem; text-decoration: none; color: inherit; background: #fff; transition: border-color .15s, box-shadow .15s;
 }
 .game-card:hover { border-color: #9fb3cc; box-shadow: 0 6px 18px rgba(23, 35, 52, .08); }
+.gallery > li.table-note { grid-column: 1 / -1; }
 .game-card .gc-model { font-weight: 650; color: #172334; }
 .game-card .gc-meta { font-size: .85rem; color: var(--color-muted); }
 .game-card .gc-result { font-size: .9rem; }

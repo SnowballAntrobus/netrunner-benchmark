@@ -16,13 +16,14 @@ instrument behaved. Rules conformance is the sibling skill
 Before writing anything, read the accumulated exemplars — the review
 corpus grows and your output must extend it, not reset it:
 
-- `harness/docs/GAME1_REVIEW.md`, `OPUS_GAME_REVIEW.md`, and any newer
-  `*_REVIEW.md`
+- the earlier reviews, kept in git history (`git show
+  b1e80e8:harness/docs/GAME1_REVIEW.md`, and `OPUS_GAME_REVIEW.md`), and
+  any newer `*_REVIEW.md` the user keeps
 - any human notes files the user provides or that sit alongside a
   report (`*Notes.md`) — these are the ground truth for what the
   human reviewer cares about and for the expected adjudication style
-- `harness/docs/DECISION_LOG.md` — the record schema and its
-  documented traps (seq gaps, mock quirks, game-1 degradation)
+- `harness/docs/records.md` — the record schema and its documented
+  traps (seq gaps, mock quirks)
 
 Match the established voice: claims verified against records, wrong
 notes respectfully corrected with evidence, findings classified, and a
@@ -34,13 +35,14 @@ notes respectfully corrected with evidence, findings classified, and a
   `record.json` (counters, usage, full log), `decisions.jsonl`
   (per-decision records, both seats), `debrief.json` (postgame
   self-report; v2+: `final_events` catch-up + verdict), `frames.jsonl`
-  (board snapshots). Legacy flat games use `<game_id>.json` / `.jsonl`
-  / `-debrief.json` stems.
+  (board snapshots).
 - Which seats a model played: `record.llmSeat` (`runner`, `corp` or
   `both`; absent = `runner`) and per-seat counters in `record.seats`.
   In two-model games review each seat's play and memos separately, and
-  read `debrief.json` as `{seats: [...]}`. The interface era matters
-  for any comparison: `aiBranches: "neutral"` = era 4 (D14).
+  read `debrief.json` as `{seats: [...]}`. Compare only games played
+  under the same interface: `aiBranches: "rules"` marks the ablation.
+  Seats played from a chat app have `driver: "mcp"`; their `model` is
+  whatever the player reported, and they have no token counts.
 - The board at any decision: `npx tsx src/cli.ts replay --file <run>
   --step N --screenshot board.png` (or `#seq=` in the viewer) — use it
   to check claims about the board instead of reconstructing it.
@@ -141,8 +143,8 @@ A review doc in the corpus style (`harness/docs/<GAME>_REVIEW.md`
 naming when asked to produce a file; otherwise structured chat):
 machinery health first, adjudications with evidence, same-seed
 comparison table when useful, then **queue deltas** — every finding
-lands as either a design candidate, a Phase-2 parked item, a
-documentation note, or an explicit no-action with reason. When
+lands as either a design candidate, a parked item, a documentation
+note, or an explicit no-action with reason. When
 adjudicating human notes, address every note by its anchor (#seq),
 and never soften a correction: ground truth wins, whoever wrote the
 note.

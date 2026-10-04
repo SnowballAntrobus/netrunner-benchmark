@@ -1,4 +1,4 @@
-/** Golden-log regression suite (PHASE1 M2).
+/** Golden-log regression suite.
  *
  *  `record` plays every game in fixtures/golden/manifest.json and freezes
  *  {result, normalized log} per game. `check` replays them and diffs — any
@@ -45,7 +45,7 @@ export function toFixture(id: string, r: GameRecord): Fixture {
   };
 }
 
-/** The golden comparison itself, as a pure function (D11 selftest runs
+/** The golden comparison itself, as a pure function (the selftest runs
  *  it against doctored fixture copies): same result, and the first
  *  normalized log line where the two differ (-1 = identical). */
 export function compareToFixture(
@@ -101,7 +101,7 @@ export async function golden(repoRoot: string, mode: "record" | "check"): Promis
       try {
         frozen = JSON.parse(await readFile(fixtureFile, "utf-8")) as Fixture;
       } catch {
-        console.log(`${g.id} FAIL: fixture missing — run \`npm run golden -- record\``);
+        console.log(`${g.id} FAIL: fixture missing — run \`npx tsx src/cli.ts golden record\``);
         failures++;
         continue;
       }

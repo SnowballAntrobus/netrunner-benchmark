@@ -1,4 +1,4 @@
-/** LLM clients + transcript + retry bridge (PHASE1 M4; D01 conversational).
+/** LLM clients + transcript + retry bridge.
  *
  *  AnthropicClient: forced tool call ("choose_option") so the response is
  *  schema-validated JSON at the API layer; system prompt carries a
@@ -6,7 +6,7 @@
  *  second, moving breakpoint sits on the last transcript turn so the whole
  *  immutable history prefix is a cache hit.
  *
- *  Transcript (D01): the append-only conversation history. The Messages API
+ *  Transcript: the append-only conversation history. The Messages API
  *  is stateless — the "conversation" exists only because we re-send it.
  *  Assistant turns store the raw JSON of the model's accepted tool call as
  *  plain text (the same convention the retry loop has always used), which
@@ -29,10 +29,10 @@ export interface Usage {
   tokensOut: number;
   cacheRead: number;
   cacheWrite: number;
-  /** D13: the provider-billed cost for this call in USD, when the
-   *  gateway reports it (OpenRouter `usage.cost`). Absent for direct
-   *  Anthropic and mock. Measured beats modeled: the corpus report
-   *  prefers accumulated reported cost over price-table estimates. */
+  /** The provider-billed cost for this call in USD, when the gateway
+   *  reports it (OpenRouter `usage.cost`). Absent for direct Anthropic
+   *  and mock. Measured beats modeled: the corpus report prefers
+   *  accumulated reported cost over price-table estimates. */
   costUsd?: number;
 }
 
@@ -62,8 +62,7 @@ export interface SummaryResult {
   usage: Usage;
   latencyMs: number;
   /** True when the response hit max_tokens — a clipped summary is a
-   *  corrupted memory (sonnet incident: every compaction summary was cut
-   *  mid-sentence at the old 2048 cap) and must be visible in records. */
+   *  corrupted memory and must be visible in records. */
   truncated: boolean;
 }
 
@@ -260,8 +259,8 @@ export class MockClient implements ChoiceClient {
   }
 
   async summarize(system: string, messages: ChatMessage[]): Promise<SummaryResult> {
-    // Serves both free-text paths (D01 compaction, D07 debrief) — the
-    // canned text is deliberately purpose-neutral.
+    // Serves both free-text paths (compaction, debrief) — the canned
+    // text is deliberately purpose-neutral.
     return {
       text: "mock: free-text response (summarize path exercised keylessly).",
       usage: this.estimateUsage(system, messages),
@@ -271,12 +270,12 @@ export class MockClient implements ChoiceClient {
   }
 }
 
-// ---- OpenRouter (D13): non-Anthropic providers through one gateway --------
+// ---- OpenRouter: non-Anthropic providers through one gateway --------------
 // Same ChoiceClient contract — forced choose_option function call, plain
 // completion for summarize. Claude models NEVER route here (direct API
 // keeps first-party caching + billing). Decoding is provider-default and
-// no `seed` parameter is ever sent (see D13: partial determinism would
-// make within-seed variance incomparable across providers).
+// no `seed` parameter is ever sent (partial determinism would make
+// within-seed variance incomparable across providers).
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
 
@@ -423,7 +422,7 @@ export class OpenRouterClient implements ChoiceClient {
       try {
         input = JSON.parse(args) as { option?: unknown; reasoning?: unknown };
       } catch {
-        return { parsed: null, raw: args, usage }; // → unparseable (D10)
+        return { parsed: null, raw: args, usage }; // → unparseable
       }
       const option =
         typeof input.option === "number"
@@ -460,7 +459,7 @@ export class OpenRouterClient implements ChoiceClient {
   }
 }
 
-// ---- replay (D15) -----------------------------------------------------------
+// ---- replay -----------------------------------------------------------------
 // Re-simulates a recorded game: every API decision is answered with the
 // recorded choice. The engine is deterministic under the seed, the page's
 // own auto-resolution/fusion is deterministic, so a faithful replay reaches
@@ -519,7 +518,7 @@ export function makeClient(model: string, seed: number, maxTokens = 1024): Choic
   return new AnthropicClient(model, maxTokens);
 }
 
-// ---- transcript (D01) ------------------------------------------------------
+// ---- transcript ------------------------------------------------------------
 
 export class Transcript {
   /** Append-only user/assistant exchange pairs (post-compaction: notice +
@@ -534,8 +533,7 @@ export class Transcript {
   /** First observed request size after a compaction — the irreducible
    *  floor of system + summary + kept exchanges. When the configured
    *  threshold sits at/below this floor, compacting again reclaims
-   *  nothing (sonnet incident: threshold 100K over a ~95K floor produced
-   *  13 compactions in one game, thrashing every 2-9 decisions). */
+   *  nothing and re-triggers within a few decisions (thrashing). */
   private postCompactionBaseline: number | null = null;
   private awaitingBaseline = false;
   /** Decisions at which the floor guard vetoed a compaction while over
@@ -575,11 +573,11 @@ export class Transcript {
     if (this.promptTokens === null || this.promptTokens <= this.threshold) {
       return false;
     }
-    // Floor guard (sonnet incident): a compaction must be able to reclaim
-    // real space. Require (a) at least 3 droppable exchanges beyond the
-    // kept window, and (b) growth of ≥ max(8K, threshold/10) over the
-    // post-compaction floor — otherwise compacting burns a summarize call
-    // to shave a couple of exchanges and re-triggers immediately.
+    // Floor guard: a compaction must be able to reclaim real space.
+    // Require (a) at least 3 droppable exchanges beyond the kept window,
+    // and (b) growth of ≥ max(8K, threshold/10) over the post-compaction
+    // floor — otherwise compacting burns a summarize call to shave a
+    // couple of exchanges and re-triggers immediately.
     const droppable = Math.floor(this.turns.length / 2) - this.keepPairs;
     const minGrowth = Math.max(8000, Math.floor(this.threshold / 10));
     const floorOk =
@@ -618,8 +616,8 @@ export class Transcript {
 
 // ---- retry bridge ----------------------------------------------------------
 
-/** D10: a FAILED attempt, kept for forensics (game 2's 28 retries were
- *  unexplainable because only accepted attempts were recorded). */
+/** A FAILED attempt, kept for forensics: with only accepted attempts
+ *  recorded, retries cannot be explained. */
 export interface FailedAttempt {
   raw: string;
   problem: "unparseable" | "missing-option" | "out-of-range";
@@ -636,14 +634,14 @@ export interface BridgeResult {
   /** Request size (input + cache read + cache write) of the LAST attempt —
    *  the observed transcript-plus-decision footprint driving compaction. */
   promptTokens: number;
-  /** D10: failed attempts in order (empty when first attempt succeeded —
+  /** Failed attempts in order (empty when first attempt succeeded —
    *  the overwhelming majority). The accepted attempt stays in `raw`. */
   attempts: FailedAttempt[];
 }
 
 const MAX_ATTEMPTS = 3;
 
-/** D10 classification of a failed attempt. `parsed` null with raw that is
+/** Classification of a failed attempt. `parsed` null with raw that is
  *  a JSON OBJECT means the tool input existed but carried no usable
  *  option; non-object raw is unparseable output; a parsed-but-invalid
  *  index is out-of-range. */

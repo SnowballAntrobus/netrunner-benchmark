@@ -1,4 +1,4 @@
-/* Honest state serializer (PHASE1 M3).
+/* Honest state serializer.
  *
  * window.__harness.stateFor(side) → JSON-serializable view of the game from
  * one seat's perspective. Every visibility decision defers to the engine's
@@ -39,7 +39,7 @@
     return out;
   }
 
-  // `reveal` (D14): the viewer is SEARCHING its own deck (Mutual Favor's
+  // `reveal`: the viewer is SEARCHING its own deck (Mutual Favor's
   // stack search, a Corp R&D tutor) — searching means looking, which the
   // engine's PlayerCanLook doesn't model. Only llmplayer.js passes it, for
   // menu entries naming cards in the deciding seat's own stack/R&D.
@@ -146,21 +146,21 @@
     if (t.indexOf("RC:") === 0) return false; // RunCalculator diagnostics (runner-AI private)
     if (t.indexOf("ERROR:") === 0) return false; // engine error channel (surfaced via __harness.errors)
     if (t.indexOf("DEBUG:") === 0) return false; // debug-menu output
-    if (t.indexOf("AI would have chosen:") === 0) return false; // testAI shadow mode (M4 agreement metric)
+    if (t.indexOf("AI would have chosen:") === 0) return false; // testAI shadow mode (rules-AI pick)
     if (t.indexOf("[") === 0) return false;
     if (t.indexOf("PixiJS") !== -1) return false;
     return true;
     // NOTE: card-trigger announcements also use a "Title:" shape
     // ("Pantograph: Gain 1[c] ... triggered") and are public — filters must
-    // stay exact-prefix, never generic "word-colon" (log-corpus audit).
+    // stay exact-prefix, never generic "word-colon".
   }
 
-  // D07 rev 2: the runner-visible log from a given capturedLog index to the
-  // end — the terminal catch-up for the debrief. Uses the SAME
-  // isPublicLogLine filter as state.log (the model-visible flow must match
-  // exactly what a next decision would have delivered; the invariant
-  // checker's independent copy stays independent). Turn markers included,
-  // same synthesis as publicLogTail.
+  // The public log from a given capturedLog index to the end — the
+  // terminal catch-up for the debrief. Uses the SAME isPublicLogLine
+  // filter as state.log (the model-visible flow must match exactly what a
+  // next decision would have delivered; the invariant checker's
+  // independent copy stays independent). Turn markers included, same
+  // synthesis as publicLogTail.
   window.__harness.publicLogSince = function (fromIndex) {
     var src = typeof capturedLog !== "undefined" ? capturedLog : [];
     var markerAt = {};
@@ -213,7 +213,7 @@
   function playerEntry(player, viewer) {
     var isRunner = player === runner;
     var entry = {
-      // Full cardEntry (D02): identities can host counters and cards.
+      // Full cardEntry: identities can host counters and cards.
       identity: player.identityCard ? cardEntry(player.identityCard, viewer) : null,
       credits: Credits(player),
       clicks: player.clickTracker,
@@ -221,9 +221,9 @@
       agendaPoints: AgendaPoints(player),
       scored: pileEntries(player.scoreArea, viewer),
     };
-    // Events/operations mid-resolution (D02): Play() moves the card to
-    // resolvingCards, previously an unserialized zone — an active Overclock
-    // (with its hosted credits) was invisible. cardEntry → PlayerCanLook
+    // Events/operations mid-resolution: Play() moves the card to
+    // resolvingCards — without this zone an active Overclock (with its
+    // hosted credits) would be invisible. cardEntry → PlayerCanLook
     // honesty applies as everywhere.
     if (player.resolvingCards && player.resolvingCards.length) {
       entry.resolving = pileEntries(player.resolvingCards, viewer);
@@ -238,7 +238,7 @@
       entry.setAside = pileEntries(player.identityCard.setAsideCards, viewer);
     }
     if (isRunner) {
-      // Run-scoped credits (D02): already INCLUDED in the credits total
+      // Run-scoped credits: already INCLUDED in the credits total
       // (Credits() adds them) but lost unspent at run end — surfaced so the
       // ephemeral part of the total is visible. Name matches the engine's
       // public log line ("... unspent temporary credits").
@@ -295,14 +295,14 @@
       state.run = {
         server: ServerName(attackedServer),
         approachIcePosition: approachIce, // 0 = innermost, -1 = none
-        // D09-2 rider (opus debrief Q5): total ice on the attacked server,
-        // so "position P of N, working inward" is computable at a glance.
+        // Total ice on the attacked server, so "position P of N, working
+        // inward" is computable at a glance.
         iceCount: attackedServer.ice ? attackedServer.ice.length : 0,
       };
       if (typeof encounteredIce !== "undefined" && encounteredIce) {
         state.run.encounteredIce = cardEntry(encounteredIce, viewer);
       }
-      // The card being accessed (D02): the steal/trash/continue decision's
+      // The card being accessed: the steal/trash/continue decision's
       // options are bare {} — without this the accessed card appears
       // nowhere in the request. PlayerCanLook grants visibility of the
       // accessed card to any viewer (engine's own rule, utility.js) and we
@@ -311,7 +311,7 @@
         state.run.accessingCard = cardEntry(accessingCard, viewer);
       }
     }
-    // RFG zone (D02): live in the current pool — Spin Doctor removes
+    // RFG zone: live in the current pool — Spin Doctor removes
     // itself from the game. One shared engine array; name matches the
     // "removed from the game" log line.
     if (typeof removedFromGame !== "undefined" && removedFromGame.length) {
@@ -339,18 +339,18 @@
     var all = AllCards(corp).concat(AllCards(runner));
     if (corp.identityCard) all.push(corp.identityCard);
     if (runner.identityCard) all.push(runner.identityCard);
-    // Zones the engine's AllCards omits but the serializer now emits (D02):
-    // keep the checker's census a superset of the serializer's reach.
+    // Zones the engine's AllCards omits but the serializer emits: keep the
+    // checker's census a superset of the serializer's reach.
     if (typeof removedFromGame !== "undefined") all = all.concat(removedFromGame);
     [corp, runner].forEach(function (p) {
       if (p.identityCard && p.identityCard.setAsideCards) {
         all = all.concat(p.identityCard.setAsideCards);
       }
     });
-    // Hosted cards (D16): the serializer reaches them through `hosted`,
-    // and some live outside every zone AllCards walks — Detente hosts a
-    // Corp card faceup on Runner hardware, "not installed". Without them
-    // the census missed a visible copy and flagged its public title.
+    // Hosted cards: the serializer reaches them through `hosted`, and
+    // some live outside every zone AllCards walks — Detente hosts a Corp
+    // card faceup on Runner hardware, "not installed". Without them the
+    // census would miss a visible copy and flag its public title.
     var seen = [];
     var addHosted = function (cards) {
       for (var i = 0; i < cards.length; i++) {
@@ -381,7 +381,7 @@
     return null;
   }
 
-  // ---- D11 selftest plants (&plant=<class>) -------------------------------
+  // ---- selftest plants (&plant=<class>) -----------------------------------
   // Fault injection for `cli.ts selftest`: corrupts what a checker is about
   // to scan — the freshly serialized state, its log tail, an LLM seat's
   // menu JSON — ONCE per game, and records what was planted so the host
@@ -418,7 +418,7 @@
         detail: title, path: "state.planted",
       };
     } else if (PLANT === "private-log") {
-      var line = "SPOILER: planted private line (D11 selftest)";
+      var line = "SPOILER: planted private line (selftest)";
       log.push(line);
       window.__harness.planted = {
         decision: decisionIndex, viewer: side, kind: "private-log-line", detail: line,
@@ -450,7 +450,7 @@
     // and the ability's use was publicly announced via Log() at
     // TriggerAbility — the title names an announced action. It can outlive
     // visibility of the card itself (Spin Doctor shuffles itself into R&D),
-    // which is how this surfaced as a false positive on seeds 110/107.
+    // so checking it would raise false positives.
     // phase.identifier (rulebook step) stays checked.
     if (state.phase) {
       state.phase = {
@@ -458,7 +458,7 @@
         activePlayer: state.phase.activePlayer,
       };
     }
-    plantState(side, state, log, decisionIndex); // D11 selftest only (no-op otherwise)
+    plantState(side, state, log, decisionIndex); // selftest only (no-op otherwise)
     // Pristine stringify (harness.html): the engine's global override
     // collapses title-bearing objects — the structural scan must see the
     // full serialized structure, exactly as the host receives it.
@@ -494,8 +494,8 @@
 
     // Log-tail check: no private-channel lines survived the filter.
     // Deliberately does NOT reuse isPublicLogLine — the checker must stay
-    // independent of the filter it audits (a shared predicate made this
-    // check tautological; caught by a planted-leak negative test).
+    // independent of the filter it audits (a shared predicate would make
+    // this check tautological).
     var PRIVATE_LOG_PATTERNS = [
       /^\s*SPOILER:/, /^\s*AI:/, /^\s*RC:/, /^\s*ERROR:/, /^\s*DEBUG:/,
       /^\s*AI would have chosen:/, /^\s*\[/, /PixiJS/,
@@ -519,7 +519,7 @@
     window.__harness.invariantChecks++;
   }
 
-  // D14: the option-menu half of the invariant. Menus shown to an LLM seat
+  // The option-menu half of the invariant. Menus shown to an LLM seat
   // are built by llmplayer.js from engine option objects (labels come from
   // the engine's own GetTitle masking, card entries from cardEntry), so they
   // get the same structural test as the state: no title of an OPPONENT card
@@ -556,7 +556,7 @@
   }
 
   if (params.get("invariant")) {
-    // D14: LLM seats have no rules-AI entry point to wrap — llmplayer.js
+    // LLM seats have no rules-AI entry point to wrap — llmplayer.js
     // calls this at each of its decisions (both viewers' state + the
     // seat's own menu), so model-vs-model games are covered too.
     window.__harness.invariantAtLLMDecision = function (side, optionsJson) {

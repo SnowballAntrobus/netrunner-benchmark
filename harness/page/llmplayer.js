@@ -1,4 +1,4 @@
-/* LLMPlayer (PHASE1 M4; seat-general since D14): an LLM in a player's seat.
+/* LLMPlayer: an LLM in a player's seat.
  *
  * Activated by &llm=runner, &llm=corp, or &llm=both (both seats LLM). The
  * code is seat-agnostic; every decision request names its seat. Requires
@@ -15,7 +15,7 @@
  *   SelectChoice overridden — cards get sane rules-AI bookkeeping, the
  *   engine gets LLM decisions. The shell deliberately ignores
  *   `this.preferred` hints that cards set for the rules AI.
- * - D14: card scripts ALSO branch on player.AI to decide FOR the rules AI
+ * - Card scripts ALSO branch on player.AI to decide FOR the rules AI
  *   (`//**AI code` branches) — pruning a menu to the rules AI's pick,
  *   suppressing an option entirely, or pre-filling a multi-select. For an
  *   LLM seat that silently replaces the model's choice with the rules
@@ -48,51 +48,50 @@
     return seat === "corp" ? corp : runner;
   }
 
-  // D03: auto-resolve single-option decisions (default ON; &autoresolve=0
-  // disables — the game-1-interface comparison arm). A 1-option menu has
-  // exactly one possible outcome; the request is still fully built and
-  // logged (forced: true), the preview-divergence check still runs, but
-  // no API call is made and nothing enters the transcript. Game-1 data:
-  // 601/768 runner decisions (78%) were single-option, consuming 77% of
-  // input tokens and eliciting 18 of 25 retries.
+  // Auto-resolve single-option decisions (default ON; &autoresolve=0
+  // disables it, for comparison runs). A 1-option menu has exactly one
+  // possible outcome; the request is still fully built and logged
+  // (forced: true), the preview-divergence check still runs, but no API
+  // call is made and nothing enters the transcript. Most of a seat's
+  // decisions are single-option; asking them would spend most input
+  // tokens and invite retries.
   var AUTO_RESOLVE = params.get("autoresolve") !== "0";
 
-  // D09: compound action menus (default ON; &actions=split disables — the
-  // game-1/2-interface comparison arm). Subject-taking command options are
-  // expanded into complete actions using their D05 previews; the engine's
-  // follow-up select is answered by the page by matching the chosen
-  // subject. Mismatch falls back to a REAL select decision (and D05's
-  // divergence flag fires via the usual check) — fusion can never wedge.
+  // Compound action menus (default ON; &actions=split disables them, for
+  // comparison runs). Subject-taking command options are expanded into
+  // complete actions using their previews; the engine's follow-up select
+  // is answered by the page by matching the chosen subject. Mismatch
+  // falls back to a REAL select decision (and the divergence flag fires
+  // via the usual check) — fusion can never wedge.
   var COMPOUND = params.get("actions") !== "split";
   // Per seat: {queue: [<stripped promised subjects, in order>]}
   var pendingCompound = { runner: null, corp: null };
 
-  // D14: rules-AI branch neutralization (default ON; &aibranches=rules
-  // restores the era-3 behavior, where card code saw LLM seats as rules AI).
+  // Rules-AI branch neutralization (default ON; &aibranches=rules is the
+  // ablation where card code sees LLM seats as rules AI).
   var NEUTRALIZE = params.get("aibranches") !== "rules";
 
-  // D15: viewer frames on (&frames=1, set by the host). Rules-AI decisions
+  // Viewer frames on (&frames=1, set by the host). Rules-AI decisions
   // carry their board snapshot in the log record (the opponent wrapper).
   var FRAMES = params.get("frames") === "1";
 
   // The engine's utility.js overrides the global JSON.stringify with a
   // title-collapsing replacer (readable logs). Harness requests must keep
   // full structure — use the pristine stringify captured by harness.html
-  // before the engine loaded. (Root cause of the game-1 "compact strings"
-  // schema drift.)
+  // before the engine loaded.
   var stringify =
     (window.__pristineJSON && window.__pristineJSON.stringify) || JSON.stringify;
 
-  // D05 counters (read into the game record by the host).
+  // Preview-divergence counters (read into the game record by the host).
   window.__harness.previewChecks = 0;
   window.__harness.previewDivergences = 0;
-  // D14 counters: multi-select prompts answered card-by-card, and reads of
+  // Counters: multi-select prompts answered card-by-card, and reads of
   // player.AI that the neutralizer answered with null (card code saw a
   // human seat).
   window.__harness.multiSelects = 0;
   window.__harness.neutralizedReads = 0;
 
-  // ---- D14: rules-AI branch neutralizer -----------------------------------
+  // ---- rules-AI branch neutralizer ----------------------------------------
   // player.AI becomes an accessor on each LLM seat. It answers null exactly
   // when the reading code is a card script (sets/*.js) AND no rules-AI
   // deliberation (ai_corp/ai_runner/runcalculator) is on the stack:
@@ -174,8 +173,8 @@
   };
 
   // Multi-select options carry a `.cards` slot array (the human UI fills it
-  // card by card). They need the D14 adapter and must never be fused or
-  // folded: matching one card would resolve with empty slots.
+  // card by card). They need the multi-select adapter and must never be
+  // fused or folded: matching one card would resolve with empty slots.
   function hasCardSlots(option) {
     return !!option && Array.isArray(option.cards);
   }
@@ -187,17 +186,17 @@
     return false;
   }
 
-  // D05 (generalizing D04): dry-run the exact enumeration the engine will
-  // perform if a command is chosen, so every verb-level option previews
-  // the follow-up menu it leads to — the #281 guard ("play" chosen blind,
-  // railroaded into Overclock). Parity, not help: the engine UI shows a
-  // human which cards light up as playable/installable and which servers
-  // are runnable; entries are rendered by the SAME describeOption as the
-  // real follow-up menu (minus index), so preview and menu are identical
-  // in shape. Subjectless commands (gain, draw, ...) enumerate to bare
-  // [{}] and mechanically get no preview. Read-only: these are the same
-  // menu-builder calls the engine performs for human play (verified via
-  // double mock-run byte comparison).
+  // Dry-run the exact enumeration the engine will perform if a command is
+  // chosen, so every verb-level option previews the follow-up menu it
+  // leads to and no verb is chosen blind ("play" could otherwise railroad
+  // the model into the one affordable event). Parity, not help: the engine
+  // UI shows a human which cards light up as playable/installable and
+  // which servers are runnable; entries are rendered by the SAME
+  // describeOption as the real follow-up menu (minus index), so preview
+  // and menu are identical in shape. Subjectless commands (gain, draw,
+  // ...) enumerate to bare [{}] and mechanically get no preview.
+  // Read-only: these are the same menu-builder calls the engine performs
+  // for human play (verified via double mock-run byte comparison).
   function describeCommandChoices(cmd, side) {
     try {
       if (
@@ -208,12 +207,12 @@
         return null;
       }
       // RNG guard: card-authored Enumerates may consume seeded randomness
-      // in AI branches (found empirically: the fast-advance operation
-      // Shuffles its target list when corp.AI != null — 3 draws shifted
-      // the whole stream and changed the game). Dry-runs must not consume
-      // the seeded stream, so Math.random is swapped for a local
-      // fixed-seed LCG for the duration of the enumeration: the game
-      // stream is untouched and previews stay run-to-run deterministic.
+      // in AI branches (the fast-advance operation Shuffles its target
+      // list when corp.AI != null — a few draws shift the whole stream
+      // and change the game). Dry-runs must not consume the seeded
+      // stream, so Math.random is swapped for a local fixed-seed LCG for
+      // the duration of the enumeration: the game stream is untouched and
+      // previews stay run-to-run deterministic.
       var seededRandom = Math.random;
       var localRng = 987654321;
       Math.random = function () {
@@ -226,7 +225,7 @@
       try {
         choices = currentPhase.Enumerate[cmd]();
         if (!choices || !choices.length) return null;
-        // D14: a multi-select follow-up is answered card by card — no
+        // A multi-select follow-up is answered card by card — no
         // preview, so no fusion (the follow-up arrives as a real select).
         if (isMultiSelectMenu(choices)) return null;
         for (var i = 0; i < choices.length; i++) {
@@ -235,14 +234,13 @@
           for (var k in entry) {
             if (Object.prototype.hasOwnProperty.call(entry, k)) hasContent = true;
           }
-          // D09-2: second-level preview where the follow-up menu is
-          // enumerable from a PURE card/ability Enumerate (same safety
-          // class as the phase Enumerate above; still under the RNG
-          // guard). Class (a): playing an event whose card carries its
-          // own choice (Jailbreak's server). Class (b): triggering an
-          // ability with its own parameter list (Mayfly's "which
-          // subroutine"). Anything deeper, or any card whose follow-up
-          // is created by resolution, still arrives as a real select.
+          // Second-level preview where the follow-up menu is enumerable
+          // from a PURE card/ability Enumerate (same safety class as the
+          // phase Enumerate above; still under the RNG guard): playing an
+          // event that carries its own choice (Jailbreak's server), or
+          // triggering an ability with its own parameter list (Mayfly's
+          // "which subroutine"). Anything deeper, or any card whose
+          // follow-up is created by resolution, arrives as a real select.
           var subEnum = null;
           var subThis = null;
           if (choices[i].card && choices[i].card.cardType === "event" &&
@@ -294,7 +292,7 @@
     }
   }
 
-  // ---- preview-divergence tracking (D05) ----------------------------------
+  // ---- preview-divergence tracking ----------------------------------------
   // A preview is computed at command-decision time; the eventual follow-up
   // menu could in rare cases differ (e.g. a response window between the two
   // steps changing affordability). Every followed preview is compared
@@ -323,7 +321,7 @@
     if (!pending || decisionType !== "select") return null;
     window.__harness.previewChecks++;
     // Compare with nested second-level previews stripped from both sides —
-    // actual select menus never carry a .choices field (D09-2).
+    // actual select menus never carry a .choices field.
     if (
       stringify(stripIndex(described).map(stripEntry)) ===
       stringify(pending.preview.map(stripEntry))
@@ -346,7 +344,7 @@
     }
   }
 
-  // D14: with both seats LLM the page renders as the Runner (viewingPlayer
+  // With both seats LLM the page renders as the Runner (viewingPlayer
   // = runner keeps the shared log and labels Runner-honest), so engine
   // labels name the Corp's own unseen-by-Runner cards "hidden card". Where
   // the deciding seat CAN see the option's card, restore its title — never
@@ -364,10 +362,10 @@
     return label;
   }
 
-  // D14: a menu entry naming a card in the deciding seat's OWN deck (stack
-  // or R&D) is a search — the seat looks at its deck to choose. Before D14
-  // the rules-AI branch made these picks; with the branch neutralized the
-  // model must see what it is choosing between. Opponent decks never.
+  // A menu entry naming a card in the deciding seat's OWN deck (stack or
+  // R&D) is a search — the seat looks at its deck to choose. With rules-AI
+  // branches neutralized the model makes these picks, so it must see what
+  // it is choosing between. Opponent decks never.
   function ownDeckCard(card, side) {
     try {
       return side === "runner"
@@ -399,12 +397,10 @@
     if (out.label) out.label = seatLabel(out.label, option, side);
     if (option.card && option.card.isCard) {
       out.card = window.__harness.cardEntry(option.card, side, ownDeckCard(option.card, side));
-      // D14: a menu entry must not name a card its entry says is hidden.
-      // The engine unmasks breach access-order labels for a human Runner
-      // (ChoicesAccess: "don't hide the name") — every card about to be
-      // accessed was named before its access. Found by the option-menu
-      // invariant; in era-3 records such menus were all auto-resolved or
-      // folded, so no model ever saw one.
+      // A menu entry must not name a card its entry says is hidden. The
+      // engine unmasks breach access-order labels for a human Runner
+      // (ChoicesAccess: "don't hide the name"), which would name every
+      // card about to be accessed before its access.
       if (out.card && out.card.hidden && option.card.title) {
         var title = String(option.card.title);
         ["label", "button", "text", "alt"].forEach(function (k) {
@@ -439,7 +435,7 @@
     }
   }
 
-  // ---- compound fusing (D09) ----------------------------------------------
+  // ---- compound fusing ----------------------------------------------------
 
   function stripEntry(o) {
     var copy = {};
@@ -450,10 +446,10 @@
   }
 
   // Fuse a described command menu: each preview choice becomes a complete
-  // action entry; preview-less options pass through. D09-2: a preview
-  // choice that itself carries a second-level preview (nested .choices)
-  // cross-products into entries with a `then` field — choosing one
-  // commits both steps, fulfilled in order. Returns
+  // action entry; preview-less options pass through. A preview choice that
+  // itself carries a second-level preview (nested .choices) cross-products
+  // into entries with a `then` field — choosing one commits both steps,
+  // fulfilled in order. Returns
   // {options, map: fusedIdx -> {verbIndex, subjects: [...]|null}}.
   function fuseCommandMenu(described) {
     var options = [];
@@ -511,7 +507,7 @@
 
   // ---- the decision bridge ------------------------------------------------
 
-  // `extra.multiSelect` (D14): this select is one step of a card-by-card
+  // `extra.multiSelect`: this select is one step of a card-by-card
   // multi-select — {slot, of, chosen} — shown to the model in the decision
   // message; such steps are never fused, fulfilled, or folded.
   function decide(seat, decisionType, optionList, extra) {
@@ -529,8 +525,8 @@
     }
     var divergence = checkPreviewDivergence(seat, decisionType, described);
 
-    // D09 select fulfillment: a compound choice promised subject(s) — a
-    // queue since D09-2 (two-level fusion). Match the head; on success
+    // Select fulfillment: a compound choice promised subject(s), queued in
+    // order (two-level fusion promises two). Match the head; on success
     // consume it and keep any remainder for the NEXT select; on mismatch
     // flush the whole queue and fall through to a real ask.
     var compoundChoice = -1;
@@ -544,13 +540,13 @@
       }
     }
 
-    // D09-2 class (c): access-order folds. During breach, "which card to
-    // access next" is strategically null UNLESS a steal trigger could
-    // alter the rest of the sequence — pool-audited guard: fold only
-    // when the accessed server's root holds no unrezzed installed card
-    // (see design/D09-2-deeper-fusion.md for the audit). Answered with
-    // option 0 host-side; full record, no API call. Runner seat only —
-    // breach access order is the Runner's decision.
+    // Access-order folds. During breach, "which card to access next" is
+    // strategically null UNLESS a steal trigger could alter the rest of
+    // the sequence. The guard (audited against the card pool's steal and
+    // access hooks) folds only when the accessed server's root holds no
+    // unrezzed installed card. Answered with option 0 host-side; full
+    // record, no API call. Runner seat only — breach access order is the
+    // Runner's decision.
     var orderFolded = false;
     if (
       COMPOUND &&
@@ -584,7 +580,7 @@
       orderFolded = allCards && rootSafe;
     }
 
-    // D09 command fusing: the model sees complete actions.
+    // Command fusing: the model sees complete actions.
     var fused = null;
     if (COMPOUND && decisionType === "command") {
       fused = fuseCommandMenu(described);
@@ -608,24 +604,24 @@
     if (divergence) request.previewDivergence = divergence;
     if (fused) request.compound = true;
     if (multiStep) request.multiSelect = multiStep;
-    // D09-2: unbounded cross-products by review decision — but large
-    // menus are alerted for post-hoc inspection.
+    // Cross-products are unbounded, but large menus are flagged for
+    // post-hoc inspection.
     if (fused && fused.options.length >= 40) request.largeMenu = fused.options.length;
     var seq = request.seq;
-    // D14: no-cheating invariant at LLM decisions (&invariant=1 only).
+    // No-cheating invariant at LLM decisions (&invariant=1 only).
     if (typeof window.__harness.invariantAtLLMDecision === "function") {
       window.__harness.invariantAtLLMDecision(seat, stringify(modelOptions));
     }
-    // D09: fulfilled select — host records it and answers the matched
+    // Fulfilled select — host records it and answers the matched
     // index; no API call, no transcript entry.
     if (compoundChoice >= 0) {
       request.compoundFulfilled = true;
       request.compoundChoice = compoundChoice;
     } else if (orderFolded) {
-      // D09-2 class (c): host records the fold and answers option 0.
+      // Access-order fold: host records it and answers option 0.
       request.orderFolded = true;
     }
-    // D03: decisions with a single choice for the MODEL short-circuit at
+    // Decisions with a single choice for the MODEL short-circuit at
     // the host (logged as forced, no API call). Under compound the model's
     // menu is the fused one — a lone verb with several subjects is a REAL
     // choice, so the forced test uses the model-visible length.
@@ -667,7 +663,7 @@
       });
   }
 
-  // ---- D14: multi-select adapter -------------------------------------------
+  // ---- multi-select adapter -----------------------------------------------
   // Some selects ask for several cards at once ("trash 2 cards from your
   // grip", "shuffle up to 3 cards from Archives", sabotage). Each option
   // carries a `.cards` slot array that the human UI fills one click at a
@@ -676,7 +672,7 @@
   // clicked card's option, and a button option (often gated by
   // multiSelectDynamicButtonEnabler) resolves early with what is filled.
   // The rules AIs instead pre-fill slots from `preferred` hints, which the
-  // shell ignores — so without this adapter an LLM seat resolved such
+  // shell ignores — so without this adapter an LLM seat would resolve such
   // prompts with EMPTY slots. Here the model answers the same protocol
   // one card per decision; each step is an ordinary logged select.
   function multiSelect(seat, optionList) {
@@ -779,7 +775,7 @@
               reproductionCode: reproductionCode,
             };
             if (divergence) logged.previewDivergence = divergence;
-            // D15: the viewer's board for this decision, taken NOW — the
+            // The viewer's board for this decision, taken NOW — the
             // log call below does not pause the game, so a snapshot taken
             // later by the host would show a board that has moved on.
             if (FRAMES && typeof window.__harness.snapshot === "function") {
@@ -815,8 +811,6 @@
       if (isMultiSelectMenu(optionList)) return multiSelect(seat, optionList);
       return decide(seat, "select", optionList);
     };
-    window.__rulesAI = window.__rulesAI || {};
-    window.__rulesAI[seat] = shadow; // kept for future agreement metrics
     if (NEUTRALIZE) installNeutralizer(player, shell);
     else player.AI = shell;
   }

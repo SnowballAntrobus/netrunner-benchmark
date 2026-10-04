@@ -12,7 +12,7 @@ jobs:
       run:
         working-directory: harness
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -20,36 +20,31 @@ jobs:
           cache-dependency-path: harness/package-lock.json
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: npm run typecheck
-      # M1: a seeded rules-vs-rules game is reproducible.
+      # Typecheck and unit tests.
+      - run: npm test
+      # A seeded rules-AI game replays identically, and the frozen golden
+      # games still produce the same logs.
       - run: npx tsx src/cli.ts determinism --seed 7
-      # M2: behavior matches the frozen golden fixtures.
       - run: npx tsx src/cli.ts golden check
-      # M3: no hidden information leaks from the state serializer.
+      # No seat can see what its player could not.
       - run: npx tsx src/cli.ts invariant
-      # M4.5: golden games conserve credits and clicks against the
-      # engine's own ground-truth snapshots.
+      # Credits and clicks reconcile with the engine's own snapshots.
       - run: npx tsx src/cli.ts audit
-      # D11: the checkers themselves — every planted defect caught at the
-      # planted location, every clean original passed.
+      # Every checker catches a planted defect of each class it claims.
       - run: npx tsx src/cli.ts selftest
-      # M4 (keyless): a full model-seat game via the mock client,
-      # exercising the retry, fallback, forced (D03), compaction (D01) and
-      # compound-fulfillment (D09) paths plus record validation. The
-      # lowered threshold exists because auto-resolve shrinks transcripts
-      # so much that the production 150K is never crossed keylessly; seed
-      # 3 runs long enough to exercise every acceptance clause.
+      # Mock-model games in every seat mode: retries, fallback, compaction,
+      # forced and compound decisions, record validation. The low threshold
+      # makes compaction happen in a keyless game.
       - run: npx tsx src/cli.ts llm-game --model mock --seed 3 --compact-threshold 40000
-      # D14: the Corp seat and a model in both seats, with the no-cheating
-      # checker on every state AND every menu a model seat receives.
       - run: npx tsx src/cli.ts llm-game --seat corp --model mock --seed 8 --compact-threshold 40000 --invariant
       - run: npx tsx src/cli.ts llm-game --seat both --model mock --seed 8 --compact-threshold 40000 --invariant
-      # D06 §1 / D12: the match vehicle, with a same-seed rerun so the
-      # first-divergence path runs (the mock's reruns are salted).
+      # A match with a rerun seed, so the divergence report runs.
       - run: npx tsx src/cli.ts run-match --model mock --seeds 1 --repeat 2 --label ci
-      # D15: a recorded game re-simulates from its decision stream (every
-      # decision verified) and reproduces its committed frames byte for byte.
-      - run: npx tsx src/cli.ts frames --file data/games/llm-claude-haiku-4-5-s7-1786421853374
-      - run: git diff --exit-code -- data/games
-      # D17: the project site's data builds from the tracked corpus.
+      # Whole games through the MCP server, as chat apps play them.
+      - run: npm run test:e2e
+      # The fixture game re-simulates from its decisions and reproduces its
+      # committed frames byte for byte.
+      - run: npx tsx src/cli.ts frames --file fixtures/mock-game
+      - run: git diff --exit-code -- fixtures/mock-game
+      # The project page's data builds from the corpus.
       - run: npx tsx src/cli.ts site

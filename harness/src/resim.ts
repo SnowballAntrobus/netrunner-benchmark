@@ -1,15 +1,15 @@
-/** Re-simulation (D15): replay a recorded LLM game through the live harness.
+/** Re-simulation: replay a recorded LLM game through the live harness.
  *
  *  The engine is deterministic under the game's seed and the page's own
  *  auto-resolution, fusion and folding are deterministic, so answering
  *  every API decision with its recorded choice (ReplayClient) reproduces
  *  the game exactly. Uses:
- *    - backfill viewer frames for games recorded before frames existed;
+ *    - backfill viewer frames for games recorded without them;
  *    - an end-to-end proof that a recorded game is replayable: the replay's
  *      decision stream must match the record's (seq, seat, type, choice,
  *      menu size) for EVERY decision, both seats, and end the same way.
- *  Interface flags come from the record (era-3 records predate D14 and
- *  replay with the era-3 rules-AI branch policy). No API is ever called.
+ *  Interface flags come from the record (a record without `aiBranches`
+ *  replays with the "rules" branch policy). No API is ever called.
  */
 import { copyFile, readFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -89,7 +89,7 @@ export async function resimulate(
     compactionThreshold: Number.MAX_SAFE_INTEGER, // compaction never changes the game
     autoResolve: record.autoResolve ?? true,
     actions: record.actions ?? "compound",
-    aiBranches: record.aiBranches ?? "rules", // absent = era 3 and earlier
+    aiBranches: record.aiBranches ?? "rules", // absent: the record predates the option
     debrief: false,
     frames: true,
     clientFactory: (seat, model) => new ReplayClient(model, recorded[seat] ?? []),

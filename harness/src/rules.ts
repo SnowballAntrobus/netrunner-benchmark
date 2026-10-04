@@ -1,18 +1,17 @@
-/** Official rules sourcing (PHASE1 M4.1).
+/** Official rules sourcing.
  *
- *  `npm run fetch-rules` downloads NSG's learn-to-play guides (full HTML
- *  pages) and extracts their text into harness/rules/*.txt. Snapshots are
- *  meant to be REVIEWED and COMMITTED once fetched — pinned rules text
- *  keeps experiments reproducible (same precedent as carddata.json, which
- *  already vendors NSG card text with attribution). Re-fetching is a
- *  deliberate act that shows up in review.
+ *  `npx tsx src/cli.ts fetch-rules` downloads NSG's learn-to-play guides
+ *  (full HTML pages) and extracts their text into harness/rules/*.txt.
+ *  Snapshots are meant to be REVIEWED and COMMITTED once fetched — pinned
+ *  rules text keeps experiments reproducible (same precedent as
+ *  carddata.json, which already vendors NSG card text with attribution).
+ *  Re-fetching is a deliberate act that shows up in review.
  *
- *  Rationale (see PHASE1 discussion): official text is the neutral rules
- *  source — no harness author wrote it for either side. The harness still
- *  prepends its own interface guide (unavoidable authored text: it maps
- *  rulebook concepts onto the decision protocol). Including BOTH sides'
- *  guides means the Runner knows how the Corp works; narrowing that is a
- *  future ablation knob.
+ *  Rationale: official text is the neutral rules source — no harness
+ *  author wrote it for either side. The harness still adds its own
+ *  interface guide (unavoidable authored text: it maps rulebook concepts
+ *  onto the decision protocol). Including BOTH sides' guides means each
+ *  seat knows how the other side works.
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
@@ -112,7 +111,7 @@ export async function loadOfficialRules(repoRoot: string): Promise<string> {
       parts.push(await readFile(join(dir, source.file), "utf-8"));
     } catch {
       throw new Error(
-        `missing harness/rules/${source.file} — run \`npm run fetch-rules\` once ` +
+        `missing harness/rules/${source.file} — run \`npx tsx src/cli.ts fetch-rules\` once ` +
           `(and commit the snapshots), or use --rules digest`
       );
     }

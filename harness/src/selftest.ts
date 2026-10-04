@@ -1,4 +1,4 @@
-/** D11 — audit-tooling selftest: do the checkers actually check?
+/** Audit-tooling selftest: do the checkers actually check?
  *
  *  Fault injection. Every checker must catch a planted defect of every
  *  class it claims to detect, LOCALIZED to the plant (the reported line,
@@ -6,16 +6,16 @@
  *  must stay quiet on the clean original, which is checked first.
  *
  *  Injections corrupt copies of artifacts, never checkers: an in-memory
- *  copy of a golden log, a real decision record from the tracked corpus,
+ *  copy of a golden log, a real decision record from the fixture game,
  *  the page's freshly serialized state (`&plant=`, serializer.js). The
  *  code path each checker runs here is the code path production runs.
  *
  *    audit      conservation auditor (auditGameLog) on golden fixture g01
- *    validator  decision-record validator on a corpus record
+ *    validator  decision-record validator on a fixture-game record
  *    invariant  no-cheating checker, planted leaks in live games
  *    golden     the golden comparator against doctored fixture copies
  */
-import { readFile, readdir } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join } from "node:path";
 import { auditGameLog, buildCardSideMap, type AuditResult, type AuditTraceEvent } from "./audit.js";
@@ -194,20 +194,17 @@ async function auditSuite(repoRoot: string): Promise<Outcome[]> {
 
 // --------------------------------------------------------- 2. validator
 
-async function corpusRecords(repoRoot: string): Promise<{ id: string; rows: DecisionRecord[] } | null> {
-  const dir = join(repoRoot, "harness", "data", "games");
-  if (!existsSync(dir)) return null;
-  for (const id of (await readdir(dir)).sort()) {
-    const path = join(dir, id, "decisions.jsonl");
-    if (!existsSync(path)) continue;
-    const rows = (await readFile(path, "utf-8"))
-      .split("\n")
-      .filter((l) => l.trim() !== "")
-      .map((l) => JSON.parse(l) as DecisionRecord & { record_type?: string })
-      .filter((r) => (r.record_type ?? "decision") === "decision");
-    if (rows.length) return { id, rows };
-  }
-  return null;
+/** Real decision records to mutate: the committed fixture game (the
+ *  keyless mock as the Runner against the rules AI). */
+async function fixtureRecords(repoRoot: string): Promise<{ id: string; rows: DecisionRecord[] } | null> {
+  const path = join(repoRoot, "harness", "fixtures", "mock-game", "decisions.jsonl");
+  if (!existsSync(path)) return null;
+  const rows = (await readFile(path, "utf-8"))
+    .split("\n")
+    .filter((l) => l.trim() !== "")
+    .map((l) => JSON.parse(l) as DecisionRecord & { record_type?: string })
+    .filter((r) => (r.record_type ?? "decision") === "decision");
+  return rows.length ? { id: "fixtures/mock-game", rows } : null;
 }
 
 async function validatorSuite(repoRoot: string): Promise<Outcome[]> {
@@ -215,12 +212,12 @@ async function validatorSuite(repoRoot: string): Promise<Outcome[]> {
   const add = (cls: string, ok: boolean, detail: string): void => {
     out.push({ suite: "validator", cls, ok, detail });
   };
-  const source = await corpusRecords(repoRoot);
+  const source = await fixtureRecords(repoRoot);
   if (!source) {
-    add("clean-baseline", false, "no corpus decision records (harness/data/games) to start from");
+    add("clean-baseline", false, "no fixture decision records (harness/fixtures/mock-game) to start from");
     return out;
   }
-  // The corpus games are Runner-seat games (the seat a model played).
+  // The fixture is a Runner-seat game (the seat the model played).
   const seats = new Set(["runner"]);
   const dirty = source.rows.filter((r) => validateDecisionRecord(r, seats).length > 0);
   const base = source.rows.find(
@@ -235,7 +232,7 @@ async function validatorSuite(repoRoot: string): Promise<Outcome[]> {
     cleanOk
       ? `${source.id}: all ${source.rows.length} records valid; mutating seq ${base!.seq}`
       : dirty.length
-        ? `${dirty.length} corpus records already invalid (first: seq ${dirty[0]!.seq})`
+        ? `${dirty.length} fixture records already invalid (first: seq ${dirty[0]!.seq})`
         : "no model-answered Runner record with a 2+ option menu"
   );
   if (!cleanOk) return out;
@@ -314,7 +311,7 @@ async function invariantSuite(repoRoot: string, outDir: string): Promise<Outcome
   } finally {
     await browser.close();
   }
-  // D14 menu half: a planted hidden title in an LLM seat's option menu.
+  // Menu half: a planted hidden title in an LLM seat's option menu.
   const rec = await runLLMGame({
     repoRoot,
     seed: 1,

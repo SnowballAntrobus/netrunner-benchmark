@@ -1,4 +1,4 @@
-/* Board snapshots for the viewer (D15).
+/* Board snapshots for the viewer.
  *
  * window.__harness.snapshot(seq, logIndex) → a compact, OMNISCIENT frame
  * of the whole board: every card in every zone with its identity, plus

@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <!-- Harness entry point: minimal engine loadout for headless AI-vs-AI games.
      Modeled on engine_text.html (text mode, no PHP). Engine files are loaded
-     as-is; all harness behavior lives in harness/page/bootstrap.js.
+     as-is; harness behavior lives in the harness/page/ scripts.
      URL params: faceoff=1&p=r&r=<lz-deck>&c=<lz-deck>&seed=<int>[&sets=a,b]
      [&llm=runner|corp|both] -->
 <html>
@@ -11,14 +11,13 @@
 		<meta name="robots" content="noindex">
 		<title>Chiriboga Harness</title>
 		<link rel="stylesheet" type="text/css" href="style.css">
-		<!-- Pristine JSON capture (D02): utility.js replaces the global
+		<!-- Pristine JSON capture: utility.js replaces the global
 		     JSON.stringify with a log-readability version whose replacer
 		     collapses any object bearing a .title to its title string (and
 		     null -> "null", undefined -> "undefined"). Harness serialization
 		     must NOT inherit that collapse — cardEntry objects (counters,
 		     strength, rezzed, subroutines, hosted) would flatten to bare
-		     titles, which is exactly what degraded every game-1 record.
-		     Captured here, before any engine script loads. -->
+		     titles. Captured here, before any engine script loads. -->
 		<script>window.__pristineJSON = { stringify: JSON.stringify, parse: JSON.parse };</script>
 		<script src="jquery/jquery-3.2.1.min.js"></script>
 		<script src="cardrenderer/pixi.min.js"></script>
@@ -40,10 +39,10 @@
 		<script src="utility.js"></script>
 		<script src="sets/systemgateway.js"></script>
 		<script src="sets/systemupdate2021.js"></script>
-		<!-- Card pool (D16): extra set files on demand, &sets=elevation,...
+		<!-- Card pool: extra set files on demand, &sets=elevation,...
 		     (harness/src/cardpool.ts derives the list from the decks).
 		     document.write keeps parser order: they run right here, after
-		     the base sets. Base-pool games pass no param — unchanged. -->
+		     the base sets. Base-pool games pass no param. -->
 		<script>
 			(function () {
 				var sets = new URLSearchParams(window.location.search).get("sets");
@@ -96,11 +95,11 @@
 		</div>
 		<!-- Harness bootstrap: runs after engine scripts, before body onload fires Init(). -->
 		<script src="harness/page/bootstrap.js"></script>
-		<!-- Honest state serializer + no-cheating invariant (PHASE1 M3). -->
+		<!-- Honest state serializer + no-cheating invariant. -->
 		<script src="harness/page/serializer.js"></script>
-		<!-- Omniscient board snapshots for the viewer (D15) — never sent to a model. -->
+		<!-- Omniscient board snapshots for the viewer — never sent to a model. -->
 		<script src="harness/page/snapshot.js"></script>
-		<!-- LLM seat control, active with &llm=runner|corp|both (PHASE1 M4, D14). -->
+		<!-- LLM seat control, active with &llm=runner|corp|both. -->
 		<script src="harness/page/llmplayer.js"></script>
 	</body>
 </html>

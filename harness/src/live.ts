@@ -1,4 +1,4 @@
-/** Live viewer (D15): watch a game in the board viewer while it is played.
+/** Live viewer: watch a game in the board viewer while it is played.
  *
  *  `llm-game --live` starts this server next to the game: it serves the
  *  repo statically (the viewer lives at /site/viewer/) plus one

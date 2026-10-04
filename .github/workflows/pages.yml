@@ -1,7 +1,7 @@
 name: Publish GitHub Pages
 
-# Publishing is manual while the site is being prepared (Actions → Publish
-# GitHub Pages → Run workflow). To publish on every push, add:
+# Run by hand: Actions → Publish GitHub Pages → Run workflow. To publish on
+# every push instead, add:
 #   push:
 #     branches: [dev]
 #     paths: ["site/**", "harness/data/games/**"]
@@ -29,7 +29,7 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Set up Node
         uses: actions/setup-node@v4
@@ -38,9 +38,9 @@ jobs:
           cache: npm
           cache-dependency-path: harness/package-lock.json
 
-      # site/data/ (game gallery, results tables, viewer bundles) is derived
-      # from the tracked corpus in harness/data/games — built here so it
-      # always matches the records. No browser needed.
+      # site/data/ (game gallery, results table, viewer bundles) is built
+      # from the tracked corpus in harness/data/games, so it always matches
+      # the records. No browser needed.
       - name: Build site data
         working-directory: harness
         env:
@@ -53,7 +53,7 @@ jobs:
         uses: actions/configure-pages@v5
 
       - name: Upload static site
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: site
 
