@@ -142,7 +142,7 @@ the "Publish GitHub Pages" workflow runs it and deploys `site/`
 
 ```sh
 npx tsx src/cli.ts pool                        # every precon: sets needed, qualification
-npx tsx src/cli.ts pool --qualify [--jobs 3] [--seeds 1,2,3] [--only NAME] [--resume]
+npx tsx src/cli.ts pool --qualify [--jobs N] [--seeds 1,2,3] [--only NAME] [--resume]
 npx tsx src/cli.ts smoke [--pool all|base|extended] [--seats rules,runner,corp,both] [--limit N]
 ```
 

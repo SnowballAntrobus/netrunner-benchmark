@@ -49,7 +49,7 @@ computes and passes the sets, and the game record lists them in
 ## Qualification
 
 ```sh
-npx tsx src/cli.ts pool --qualify [--jobs 3] [--seeds 1,2,3] [--only NAME] [--resume]
+npx tsx src/cli.ts pool --qualify [--jobs N] [--seeds 1,2,3] [--only NAME] [--resume]
 ```
 
 Per deck: three rules-vs-rules games against the Gateway reference
@@ -60,7 +60,16 @@ D14). A deck **qualifies** only if every game completes with no hard
 error, leak, audit finding or invalid record. Results go to
 `harness/fixtures/pool.json` (per deck: side, sets, qualified, and
 every game's outcome and first problem); the manifest is rewritten
-after each deck, so an interrupted run resumes with `--resume`.
+after each deck, so an interrupted run resumes with `--resume`. Decks
+run `--jobs` at a time (default 2).
+
+**Timing must not decide a verdict.** A hang is caught by the
+no-progress stall check (60 s without a decision). The whole-game limit
+is only a safety net, set to 15 minutes for qualification: the first
+full run used the ordinary 5-minute limit on a heavily loaded machine
+and refused long but healthy games (25 turns each side, still making
+progress) as "timeouts". A refusal is therefore only recorded after the
+deck is re-run on its own with `--only` on an idle machine.
 
 `llm-game` and `run-match` refuse a deck that failed (`--allow-unqualified`
 overrides) and warn about one never qualified; `smoke` skips failed

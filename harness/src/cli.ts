@@ -767,12 +767,16 @@ if (command === "run-game") {
     .filter((n) => !only || n === only)
     .sort();
   if (process.argv.includes("--qualify")) {
-    // Decks run --jobs at a time (default 3: rules games share one
+    // Decks run --jobs at a time (default 2: rules games share one
     // browser, each mock game launches its own). The manifest is
     // rewritten after every deck, so an interrupted run keeps its
     // progress; --resume skips decks already qualified on the same seeds.
+    // Games get a generous wall-clock limit: a long game on a loaded
+    // machine must not read as an engine defect (a true hang is caught by
+    // the no-progress stall check, which stays at its default).
     const seeds = arg("seeds", "1,2,3").split(",").map((x) => parseInt(x, 10));
-    const jobs = Math.max(1, parseInt(arg("jobs", "3"), 10));
+    const jobs = Math.max(1, parseInt(arg("jobs", "2"), 10));
+    const timeoutMs = 900_000;
     const reference = { corp: "Gateway Corp", runner: "Gateway Runner" };
     const cardSide = await buildCardSideMap(repoRoot);
     const existing = (await pool.loadPoolManifest(repoRoot)) ?? null;
@@ -822,7 +826,7 @@ if (command === "run-game") {
         for (const sd of seeds) {
           try {
             const rec = await runGame(
-              { repoRoot, seed: sd, corpPrecon, runnerPrecon, extraParams: "&invariant=1" },
+              { repoRoot, seed: sd, corpPrecon, runnerPrecon, extraParams: "&invariant=1", timeoutMs },
               browser
             );
             const hard = pool.hardErrors(rec.errors);
