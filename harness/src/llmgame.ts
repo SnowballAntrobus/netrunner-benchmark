@@ -47,7 +47,8 @@ export type LiveEvent =
   | { type: "decision"; record: DecisionRecord }
   | { type: "compaction"; record: CompactionRecord }
   | { type: "frame"; frame: Record<string, unknown> }
-  | { type: "end"; record: LLMGameRecord };
+  /** `more`: another game of the same match follows (run-match). */
+  | { type: "end"; record: LLMGameRecord; more?: boolean };
 
 export interface LLMGameOptions {
   repoRoot: string;
@@ -120,8 +121,9 @@ export interface LLMGameOptions {
   /** Appended verbatim to the harness URL — e.g. "&invariant=1" runs the
    *  no-cheating checker at every decision (D14: LLM menus included). */
   extraParams?: string;
-  /** Override the per-seat client (D15 replay re-simulation). */
-  clientFactory?: (seat: Seat, model: string) => ChoiceClient;
+  /** Override the per-seat client (D15 replay re-simulation, salted mock
+   *  reruns in run-match). Returning undefined keeps the default client. */
+  clientFactory?: (seat: Seat, model: string) => ChoiceClient | undefined;
 }
 
 export interface DecisionRecord {
@@ -639,6 +641,17 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
   // D15: one board snapshot per decision (both seats) for the viewer —
   // omniscient, so never shown to a model; written to frames.jsonl.
   let framesQueue: Promise<void> = Promise.resolve();
+  const recordFrame = async (frame: Record<string, unknown>): Promise<void> => {
+    if (!framesPath) return;
+    emit({ type: "frame", frame });
+    const path = framesPath;
+    framesQueue = framesQueue.then(() => appendFile(path, JSON.stringify(frame) + "\n"));
+    await framesQueue;
+  };
+  // Model-seat decisions: the page is paused awaiting the host's answer,
+  // so a snapshot taken from here sees the board the decision was asked
+  // on. (Rules-AI decisions do NOT pause the page — their snapshot is
+  // taken in the page at decision time and arrives with the log record.)
   const captureFrame = async (seq: number, logIndex: number | null): Promise<void> => {
     if (!framesPath) return;
     let frame: Record<string, unknown> | null = null;
@@ -655,11 +668,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
     } catch {
       frame = null;
     }
-    if (!frame) return;
-    emit({ type: "frame", frame });
-    const path = framesPath;
-    framesQueue = framesQueue.then(() => appendFile(path, JSON.stringify(frame) + "\n"));
-    await framesQueue;
+    if (frame) await recordFrame(frame);
   };
 
   try {
@@ -878,9 +887,10 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
       const r = JSON.parse(recordJson) as PageDecisionRequest & {
         choice: number;
         logIndex?: number | null;
+        frame?: Record<string, unknown>;
       };
       record.rulesDecisions++;
-      await captureFrame(r.seq, r.logIndex ?? null);
+      if (r.frame) await recordFrame(r.frame);
       await writeDecision({
         record_type: "decision",
         game_id: gameId,
@@ -922,6 +932,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
       `?faceoff=1&p=${viewSide}&llm=${mode}&seed=${seed}` +
       `&autoresolve=${autoResolve ? 1 : 0}&actions=${actions}` +
       (aiBranches === "rules" ? "&aibranches=rules" : "") +
+      (framesOn ? "&frames=1" : "") +
       setsParam(cardSets) +
       `&c=${encodeDeckParam(corpDeck)}&r=${encodeDeckParam(runnerDeck)}` +
       (options.extraParams ?? "");
@@ -1072,6 +1083,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
             neutralizedReads?: number;
             invariantChecks?: number;
             invariantViolations?: object[];
+            planted?: object | null;
           };
         }
       ).__harness;
@@ -1083,6 +1095,7 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
         neutralizedReads: h.neutralizedReads ?? 0,
         invariantChecks: h.invariantChecks ?? 0,
         invariantViolations: h.invariantViolations ?? [],
+        planted: h.planted ?? null,
       };
     })) as {
       log: string[];
@@ -1092,11 +1105,13 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
       neutralizedReads: number;
       invariantChecks: number;
       invariantViolations: object[];
+      planted: object | null;
     };
     if (options.extraParams?.includes("invariant")) {
       record.invariantChecks = finals.invariantChecks;
       record.invariantViolations = finals.invariantViolations;
     }
+    if (options.extraParams?.includes("plant=")) record.planted = finals.planted;
     record.log = finals.log;
     record.previewChecks = finals.previewChecks;
     record.previewDivergences = finals.previewDivergences;

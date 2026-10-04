@@ -406,13 +406,17 @@ export async function writeReport(repoRoot: string): Promise<string> {
 
   // §2 per-(seat, model) aggregates (current era)
   lines.push("", "## Per-seat aggregates (current era; n is small — read n, not trends)", "");
-  lines.push("| seat | model | n | wins | runner flatlines | mean corp turns | mean API dec. | mean $ |");
-  lines.push("|---|---|---|---|---|---|---|---|");
-  for (const a of aggregates(cur)) {
-    lines.push(
-      `| ${a.seat} | ${a.model} | ${a.n} | ${a.wins}/${a.completed} | ${a.flatlines}/${a.completed} | ` +
-        `${a.meanTurns.toFixed(1)} | ${a.meanApi.toFixed(0)} | ${fmt.usd(a.meanCost)} |`
-    );
+  if (cur.length) {
+    lines.push("| seat | model | n | wins | runner flatlines | mean corp turns | mean API dec. | mean $ |");
+    lines.push("|---|---|---|---|---|---|---|---|");
+    for (const a of aggregates(cur)) {
+      lines.push(
+        `| ${a.seat} | ${a.model} | ${a.n} | ${a.wins}/${a.completed} | ${a.flatlines}/${a.completed} | ` +
+          `${a.meanTurns.toFixed(1)} | ${a.meanApi.toFixed(0)} | ${fmt.usd(a.meanCost)} |`
+      );
+    }
+  } else {
+    lines.push("_(no games yet)_");
   }
 
   // §3 prior eras

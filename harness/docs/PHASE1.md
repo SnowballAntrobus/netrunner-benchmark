@@ -2,6 +2,17 @@
 
 *Planning document, v1. Project working name TBD (placeholder: "the harness"). Base: fork of [drbo6/chiriboga](https://github.com/drbo6/chiriboga).*
 
+> **Status at close-out (historical document, kept as written).** M0–M4
+> met. M5's tooling is complete — `run-match` (D06 §1), the replay
+> viewers (D08, D15) — and the 10-game run itself remains as the first
+> analysis task (D12). Since this plan, three parking-lot items were
+> built: the Corp seat and model-vs-model (D14) and the progressive card
+> pool (D16). Two planned files live elsewhere: the forced-tool schema
+> is in `src/llm.ts` (no `harness/src/tools/`), and the browser
+> dependencies a Node-direct port would face are catalogued in
+> [`ENGINE.md`](ENGINE.md) rather than `docs/browser-deps.md`.
+> Current state and future work: [`CLOSEOUT.md`](CLOSEOUT.md).
+
 ## Objective
 
 At the end of phase 1 we can run a complete game of Netrunner, unattended and headless, with a frontier model (Claude, Runner seat) playing against the rules-based Corp AI — with the model provably seeing only information a human Runner could see, every decision logged in a replayable form, and a small regression suite that makes later engine work safe. Ten clean games with a win rate, cost, and decision count is the finish line. Everything in the broader project (model-vs-model, harness ablations, Corp seat, MCP, RL) builds on this substrate; nothing in it is throwaway.

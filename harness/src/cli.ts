@@ -1,33 +1,24 @@
-/** Harness CLI (M1 scope).
+/** Harness CLI. Every command and flag is documented in harness/README.md.
  *
- *    tsx src/cli.ts run-game    [--seed N] [--corp "Gateway Corp"] [--runner "Gateway Runner"]
- *    tsx src/cli.ts batch       [--games N] [--seed N] [--corp ...] [--runner ...]
- *    tsx src/cli.ts determinism [--seed N]   # same seed twice, logs must match
- *    tsx src/cli.ts golden record|check      # golden-log regression fixtures
- *    tsx src/cli.ts invariant [--seeds a,b,c] # no-cheating serializer check
- *    tsx src/cli.ts llm-game [--model X|mock] [--rules official|digest]
- *                   [--profile neutral|expert] [--reasoning brief|extended|scot|none]
- *                   [--context conversational|stateless] [--history full|lean]
- *                   [--compact-threshold N] [--compact-keep N]
- *                   [--auto-resolve on|off] [--debrief on|off]
- *                   [--actions compound|split] [--progress [on|off]]
- *                   [--watch [on|off]] [--seed N] ...  (bare --progress/--watch = on)
- *    tsx src/cli.ts fetch-rules              # snapshot NSG learn-to-play guides
- *    tsx src/cli.ts audit [--file <game.json>] # conservation audit (default: golden fixtures)
- *    tsx src/cli.ts format --file <game.json>  # markdown game narratives (.report.md + .full.md)
- *    tsx src/cli.ts replay --file <game.json> [--seq N]        # replay viewer (D08): serves
- *                   [--screenshot out.png]                     # the board+reasoning stepper,
- *                                                              # or renders one moment to PNG
+ *  Games       run-game, batch (rules vs rules) · llm-game (a model in one
+ *              or both seats) · run-match (N seeds × K runs, match summary)
+ *  Review      replay (board viewer; --engine for the D08 engine replay) ·
+ *              frames (re-simulate + verify) · format · audit
+ *  Corpus/site corpus (--promote, CORPUS.md) · site (Pages data, --serve)
+ *  Card pool   pool (--qualify) · smoke
+ *  Checks      determinism · golden record|check · invariant · selftest
+ *  Rules       fetch-rules
  *
- *  Game records are written to harness/out/ as JSON; batch also writes a
- *  summary. Exit code is non-zero on any failed acceptance condition.
+ *  Run records go to harness/out/ (gitignored). Exit codes are non-zero on
+ *  any failed acceptance condition, so every check doubles as a CI step.
  */
+import { existsSync } from "node:fs";
 import { mkdir, writeFile, readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { launchBrowser, runGame, type GameRecord } from "./game.js";
 import { golden } from "./golden.js";
-import { runLLMGame, llmSeatsOf, type SeatMode } from "./llmgame.js";
+import { runLLMGame, llmSeatsOf, type SeatMode, type LLMGameOptions } from "./llmgame.js";
 import type { Seat } from "./prompts.js";
 import { startLiveViewer } from "./live.js";
 import { fetchRules } from "./rules.js";
@@ -116,64 +107,19 @@ async function save(name: string, record: GameRecord): Promise<void> {
 }
 
 const command = process.argv[2] ?? "run-game";
+
 const seed = parseInt(arg("seed", "1"), 10);
 const corpPrecon = arg("corp", "Gateway Corp");
 const runnerPrecon = arg("runner", "Gateway Runner");
 const base = { repoRoot, corpPrecon, runnerPrecon };
 
-if (command === "run-game") {
-  const record = await runGame({ ...base, seed });
-  console.log(summarize(record));
-  await save(`game-${seed}.json`, record);
-  if (record.errors.length > 0) console.log("errors:", record.errors.slice(0, 5));
-  process.exit(record.status === "completed" ? 0 : 1);
-} else if (command === "batch") {
-  const games = parseInt(arg("games", "5"), 10);
-  const browser = await launchBrowser();
-  let failed = 0;
-  const results: string[] = [];
-  for (let i = 0; i < games; i++) {
-    const record = await runGame({ ...base, seed: seed + i }, browser);
-    console.log(summarize(record));
-    results.push(summarize(record));
-    await save(`game-${seed + i}.json`, record);
-    if (record.status !== "completed") failed++;
-  }
-  await browser.close();
-  await writeFile(join(outDir, "batch-summary.txt"), results.join("\n") + "\n");
-  console.log(`\n${games - failed}/${games} games completed`);
-  process.exit(failed === 0 ? 0 : 1);
-} else if (command === "determinism") {
-  const browser = await launchBrowser();
-  const first = await runGame({ ...base, seed }, browser);
-  const second = await runGame({ ...base, seed }, browser);
-  await browser.close();
-  console.log("run 1:", summarize(first));
-  console.log("run 2:", summarize(second));
-  await save(`determinism-${seed}-a.json`, first);
-  await save(`determinism-${seed}-b.json`, second);
-  // Comparison happens on normalized lines (see src/log.ts); raw logs are
-  // preserved in out/.
-  const firstLog = normalizeLog(first.log);
-  const secondLog = normalizeLog(second.log);
-  const identical =
-    first.status === "completed" &&
-    second.status === "completed" &&
-    JSON.stringify(firstLog) === JSON.stringify(secondLog);
-  if (identical) {
-    console.log(`DETERMINISTIC: identical ${first.log.length}-line logs for seed ${seed}`);
-    process.exit(0);
-  }
-  if (first.status === "completed" && second.status === "completed") {
-    const i = firstDivergence(firstLog, secondLog);
-    if (i !== -1) {
-      console.log(`NON-DETERMINISTIC: logs diverge at line ${i}:`);
-      console.log(`  run 1: ${firstLog[i] ?? "<end>"}`);
-      console.log(`  run 2: ${secondLog[i] ?? "<end>"}`);
-    }
-  }
-  process.exit(1);
-} else if (command === "llm-game") {
+/** llm-game / run-match configuration: every knob except the seed, the
+ *  output folder and the per-game sinks. Exits on invalid flags or a
+ *  missing API key. */
+async function llmRunConfig(): Promise<{
+  seatModels: Partial<Record<Seat, string>>;
+  game: Omit<LLMGameOptions, "seed" | "outDir" | "onEvent" | "clientFactory">;
+}> {
   // D14: --seat runner (default) | corp | both. --model sets the model for
   // a single seat (and both seats unless --corp-model/--runner-model).
   const seatArg = arg("seat", "runner");
@@ -232,33 +178,96 @@ if (command === "run-game") {
     const { assertQualified } = await import("./cardpool.js");
     await assertQualified(repoRoot, [corpPrecon, runnerPrecon], boolArg("allow-unqualified"));
   }
+  return {
+    seatModels,
+    game: {
+      repoRoot,
+      corpPrecon,
+      runnerPrecon,
+      seat: seatMode,
+      model,
+      corpModel: seatModels.corp,
+      runnerModel: seatModels.runner,
+      rulesSource,
+      profile: arg("profile", "neutral"),
+      reasoningStyle,
+      contextMode,
+      historyVariant,
+      compactionThresholds,
+      compactionKeepTurns: parseInt(arg("compact-keep", "20"), 10),
+      autoResolve: arg("auto-resolve", "on") !== "off",
+      debrief: arg("debrief", "on") !== "off",
+      actions: arg("actions", "compound") === "split" ? "split" as const : "compound" as const,
+      aiBranches: arg("ai-branches", "neutral") === "rules" ? "rules" as const : "neutral" as const,
+      frames: arg("frames", "on") !== "off",
+      extraParams: boolArg("invariant") ? "&invariant=1" : "",
+    },
+  };
+}
+
+
+if (command === "run-game") {
+  const record = await runGame({ ...base, seed });
+  console.log(summarize(record));
+  await save(`game-${seed}.json`, record);
+  if (record.errors.length > 0) console.log("errors:", record.errors.slice(0, 5));
+  process.exit(record.status === "completed" ? 0 : 1);
+} else if (command === "batch") {
+  const games = parseInt(arg("games", "5"), 10);
+  const browser = await launchBrowser();
+  let failed = 0;
+  const results: string[] = [];
+  for (let i = 0; i < games; i++) {
+    const record = await runGame({ ...base, seed: seed + i }, browser);
+    console.log(summarize(record));
+    results.push(summarize(record));
+    await save(`game-${seed + i}.json`, record);
+    if (record.status !== "completed") failed++;
+  }
+  await browser.close();
+  await writeFile(join(outDir, "batch-summary.txt"), results.join("\n") + "\n");
+  console.log(`\n${games - failed}/${games} games completed`);
+  process.exit(failed === 0 ? 0 : 1);
+} else if (command === "determinism") {
+  const browser = await launchBrowser();
+  const first = await runGame({ ...base, seed }, browser);
+  const second = await runGame({ ...base, seed }, browser);
+  await browser.close();
+  console.log("run 1:", summarize(first));
+  console.log("run 2:", summarize(second));
+  await save(`determinism-${seed}-a.json`, first);
+  await save(`determinism-${seed}-b.json`, second);
+  // Comparison happens on normalized lines (see src/log.ts); raw logs are
+  // preserved in out/.
+  const firstLog = normalizeLog(first.log);
+  const secondLog = normalizeLog(second.log);
+  const identical =
+    first.status === "completed" &&
+    second.status === "completed" &&
+    JSON.stringify(firstLog) === JSON.stringify(secondLog);
+  if (identical) {
+    console.log(`DETERMINISTIC: identical ${first.log.length}-line logs for seed ${seed}`);
+    process.exit(0);
+  }
+  if (first.status === "completed" && second.status === "completed") {
+    const i = firstDivergence(firstLog, secondLog);
+    if (i !== -1) {
+      console.log(`NON-DETERMINISTIC: logs diverge at line ${i}:`);
+      console.log(`  run 1: ${firstLog[i] ?? "<end>"}`);
+      console.log(`  run 2: ${secondLog[i] ?? "<end>"}`);
+    }
+  }
+  process.exit(1);
+} else if (command === "llm-game") {
+  const { seatModels, game } = await llmRunConfig();
   const live = boolArg("live");
   const liveViewer = live ? await startLiveViewer(repoRoot) : null;
   const record = await runLLMGame({
-    repoRoot,
+    ...game,
     seed,
-    corpPrecon,
-    runnerPrecon,
-    seat: seatMode,
-    model,
-    corpModel: seatModels.corp,
-    runnerModel: seatModels.runner,
-    rulesSource,
-    profile: arg("profile", "neutral"),
-    reasoningStyle,
-    contextMode,
-    historyVariant,
-    compactionThresholds,
-    compactionKeepTurns: parseInt(arg("compact-keep", "20"), 10),
-    autoResolve: arg("auto-resolve", "on") !== "off",
-    debrief: arg("debrief", "on") !== "off",
-    actions: arg("actions", "compound") === "split" ? "split" as const : "compound" as const,
-    aiBranches: arg("ai-branches", "neutral") === "rules" ? "rules" as const : "neutral" as const,
-    frames: arg("frames", "on") !== "off",
-    extraParams: boolArg("invariant") ? "&invariant=1" : "",
+    outDir,
     progress: boolArg("progress"),
     watch: boolArg("watch"),
-    outDir,
     ...(liveViewer ? { onEvent: liveViewer.push } : {}),
   });
   console.log(summarize(record));
@@ -365,6 +374,106 @@ if (command === "run-game") {
     process.exit(ok ? 0 : 1);
   }
   process.exit(record.status === "completed" && record.invalidRecords === 0 ? 0 : 1);
+} else if (command === "run-match") {
+  // D06 §1 / D12: N games of one configuration on seeds S..S+N-1 (or
+  // --seeds a,b,c), each --repeat K times on the same seed, into
+  // out/match-<label>/ with match.json + match-summary.md. Crashes are
+  // rows, not aborts. --live follows the whole match in one viewer tab.
+  if (boolArg("watch")) {
+    console.error("run-match: --watch is per-game; use --live to follow the match in the viewer");
+    process.exit(2);
+  }
+  const { seatModels, game } = await llmRunConfig();
+  const { runMatch } = await import("./match.js");
+  const seedList = arg("seeds", "")
+    ? arg("seeds", "").split(",").map((x) => parseInt(x, 10))
+    : Array.from({ length: parseInt(arg("games", "10"), 10) }, (_, i) => seed + i);
+  if (seedList.length === 0 || seedList.some((x) => !Number.isInteger(x))) {
+    console.error("run-match: --games N (with --seed S) or --seeds a,b,c required");
+    process.exit(2);
+  }
+  const repeat = Math.max(1, parseInt(arg("repeat", "1"), 10));
+  const slug = (m: string): string => m.replace(/[^A-Za-z0-9.-]+/g, "_");
+  const who =
+    game.seat === "both"
+      ? `${slug(seatModels.corp!)}-vs-${slug(seatModels.runner!)}`
+      : `${game.seat === "corp" ? "corp-" : ""}${slug(game.model)}`;
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[-:]/g, "").replace("T", "-");
+  const label = arg(
+    "label",
+    `${who}-s${seedList[0]}-n${seedList.length}${repeat > 1 ? `x${repeat}` : ""}-${stamp}`
+  );
+  const matchDir = join(outDir, `match-${label}`);
+  if (existsSync(join(matchDir, "match.json"))) {
+    console.error(`run-match: ${matchDir} already holds a match — pick another --label`);
+    process.exit(2);
+  }
+  const promoteAll = boolArg("promote-all");
+  const corpusMod = promoteAll ? await import("./corpus.js") : null;
+  const liveViewer = boolArg("live") ? await startLiveViewer(repoRoot) : null;
+  const total = seedList.length * repeat;
+  console.log(
+    `match ${label}: ${total} game${total === 1 ? "" : "s"} (seeds ${seedList.join(",")}` +
+      `${repeat > 1 ? ` × ${repeat}` : ""}) → ${matchDir}`
+  );
+  const result = await runMatch({
+    repoRoot,
+    label,
+    matchDir,
+    seeds: seedList,
+    repeat,
+    game: { ...game, progress: boolArg("progress") },
+    ...(liveViewer ? { onEvent: liveViewer.push } : {}),
+    onGame: async (g) => {
+      const seatsTxt = g.seats.map((st) => `${st.llmDecisions} API (${st.seat})`).join(", ");
+      const cost = g.seats.every((st) => st.costUsd === null)
+        ? ""
+        : ` · $${g.seats.reduce((a, st) => a + (st.costUsd ?? 0), 0).toFixed(2)}`;
+      console.log(
+        `[${g.index}/${total}] seed ${g.seed}${repeat > 1 ? ` run ${g.run}` : ""}: ${g.status}` +
+          (g.error ? ` (${g.error})` : "") +
+          (g.winner ? ` — ${g.winner} wins (${g.reason}) ${g.corpAP}:${g.runnerAP}` : "") +
+          ` · ${seatsTxt}${cost} · ${g.minutes.toFixed(1)} min`
+      );
+      if (corpusMod && g.status === "completed" && g.runDir) {
+        const dest = await corpusMod.promote(repoRoot, join(matchDir, g.runDir), false);
+        console.log(`  promoted → ${dest}`);
+      }
+    },
+  });
+  if (corpusMod) console.log(await corpusMod.writeReport(repoRoot));
+  for (const w of result.winRates) {
+    console.log(
+      `win rate ${w.seat} · ${w.model}: ` +
+        (w.rate === null
+          ? "no completed games"
+          : `${w.wins}/${w.n} = ${(w.rate * 100).toFixed(0)}% ± ${((w.se ?? 0) * 100).toFixed(0)}% (SE clustered by seed)`)
+    );
+  }
+  for (const d of result.divergences) {
+    console.log(
+      `seed ${d.seed}: ` +
+        (d.kind === "choice"
+          ? `first divergence at seq ${d.seq} (${d.turn}) after ${d.shared} identical decisions`
+          : d.kind === "none"
+            ? `identical decision streams (${d.shared})`
+            : `${d.kind} divergence at decision ${d.shared}${d.seq !== undefined ? ` (seq ${d.seq})` : ""}`)
+    );
+  }
+  console.log(`summary: ${join(matchDir, "match-summary.md")}`);
+  if (liveViewer) await liveViewer.finish();
+  const clean =
+    result.games.every((g) => g.status === "completed" && g.invalidRecords === 0) &&
+    !result.divergences.some((d) => d.kind === "menu");
+  if (Object.values(seatModels).every((m) => m === "mock")) {
+    // CI acceptance: every game completes cleanly and, with --repeat,
+    // every same-seed pair diverges by a CHOICE (salted mock) — the
+    // first-divergence path is exercised and the menus before it agree.
+    const ok = clean && (repeat === 1 || result.divergences.every((d) => d.kind === "choice"));
+    console.log(ok ? "RUN-MATCH (mock): PASS" : "RUN-MATCH (mock): FAIL");
+    process.exit(ok ? 0 : 1);
+  }
+  process.exit(clean ? 0 : 1);
 } else if (command === "format") {
   const file = arg("file", "");
   if (!file) {
@@ -375,7 +484,6 @@ if (command === "run-game") {
   // resolve to the same artifact set.
   const { resolveGameArtifacts } = await import("./paths.js");
   const art = resolveGameArtifacts(file);
-  const { existsSync } = await import("node:fs");
   const written = await writeFormatted(art.record, existsSync(art.jsonl) ? art.jsonl : null);
   for (const w of written) console.log(w);
   process.exit(0);
@@ -396,7 +504,6 @@ if (command === "run-game") {
   const { startServer } = await import("./server.js");
   const shot = arg("screenshot", "");
   if (!process.argv.includes("--engine")) {
-    const { existsSync } = await import("node:fs");
     if (!existsSync(replayArt.frames)) {
       console.log("no frames.jsonl for this game — re-simulating it to capture them…");
       const { resimulate } = await import("./resim.js");
@@ -482,9 +589,17 @@ if (command === "run-game") {
 } else if (command === "site") {
   // D17: the project site's data — viewer bundles for every corpus game
   // with frames, plus site/data/index.json (gallery + results tables).
+  // --serve previews the built site locally (the Pages artifact is site/).
   const { buildSiteData } = await import("./site.js");
   const out = await buildSiteData(repoRoot);
   console.log(`site data: ${out.games} games, ${(out.bytes / 1e6).toFixed(1)} MB of bundles → site/data/`);
+  if (boolArg("serve")) {
+    const { startServer } = await import("./server.js");
+    const server = await startServer(repoRoot, undefined, parseInt(arg("port", "8788"), 10));
+    console.log(`site preview: http://127.0.0.1:${server.port}/site/  (Ctrl-C to stop)`);
+    await new Promise<void>((done) => process.once("SIGINT", () => done()));
+    await server.close();
+  }
   process.exit(0);
 } else if (command === "frames") {
   // D15: backfill viewer frames by re-simulating recorded games (no API
@@ -546,6 +661,11 @@ if (command === "run-game") {
   const pool = arg("pool", "all"); // all | base | extended
   const modes = arg("seats", "rules,runner,corp,both").split(",");
   const limit = parseInt(arg("limit", "0"), 10);
+  // Decks that failed pool qualification hit ENGINE defects; smoke tests
+  // the harness, so it skips them unless --allow-unqualified.
+  const manifest = await (await import("./cardpool.js")).loadPoolManifest(repoRoot);
+  const allowUnqualified = boolArg("allow-unqualified");
+  const skipped: string[] = [];
   const names = (await readdir(join(repoRoot, "precons")))
     .filter((f) => f.endsWith(".js"))
     .map((f) => f.replace(/\.js$/, ""))
@@ -558,6 +678,10 @@ if (command === "run-game") {
     const extended = check.sets.length > 0;
     if (pool === "base" && extended) continue;
     if (pool === "extended" && !extended) continue;
+    if (!allowUnqualified && manifest?.decks[name]?.qualified === false) {
+      skipped.push(name);
+      continue;
+    }
     const side = cards.get(deck.identity)?.side;
     if (side === "corp" || side === "runner") bySide[side]!.push(name);
   }
@@ -570,6 +694,9 @@ if (command === "run-game") {
     ]);
   }
   if (limit > 0) pairs = pairs.slice(0, limit);
+  if (skipped.length) {
+    console.log(`skipping ${skipped.length} deck(s) that failed pool qualification: ${skipped.join(", ")}`);
+  }
   let failures = 0;
   let games = 0;
   // Engine self-lint about card definitions — logged identically in
@@ -640,10 +767,17 @@ if (command === "run-game") {
     .filter((n) => !only || n === only)
     .sort();
   if (process.argv.includes("--qualify")) {
+    // Decks run --jobs at a time (default 3: rules games share one
+    // browser, each mock game launches its own). The manifest is
+    // rewritten after every deck, so an interrupted run keeps its
+    // progress; --resume skips decks already qualified on the same seeds.
     const seeds = arg("seeds", "1,2,3").split(",").map((x) => parseInt(x, 10));
+    const jobs = Math.max(1, parseInt(arg("jobs", "3"), 10));
     const reference = { corp: "Gateway Corp", runner: "Gateway Runner" };
     const cardSide = await buildCardSideMap(repoRoot);
     const existing = (await pool.loadPoolManifest(repoRoot)) ?? null;
+    const resume = process.argv.includes("--resume");
+    const keep = existing && (only || resume) ? { ...existing.decks } : {};
     const manifest: import("./cardpool.js").PoolManifest = {
       comment:
         "Card-pool qualification (D16), generated by `cli.ts pool --qualify`. Decks with " +
@@ -652,10 +786,31 @@ if (command === "run-game") {
       generated: new Date().toISOString().slice(0, 10),
       referenceOpponents: reference,
       seeds,
-      decks: only && existing ? { ...existing.decks } : {},
+      decks: keep,
+    };
+    const sameSeeds = (d: { games: { seed: number; kind: string }[] }): boolean =>
+      JSON.stringify(d.games.filter((g) => g.kind === "rules").map((g) => g.seed)) ===
+      JSON.stringify(seeds);
+    const todo = names.filter((n) => !(resume && keep[n] && sameSeeds(keep[n]!)));
+    if (resume) console.log(`resuming: ${names.length - todo.length} decks kept, ${todo.length} to run`);
+    const writeManifest = async (): Promise<void> => {
+      const decks = Object.fromEntries(
+        Object.entries(manifest.decks).sort(([a], [b]) => a.localeCompare(b))
+      );
+      await writeFile(
+        join(repoRoot, pool.POOL_MANIFEST),
+        JSON.stringify({ ...manifest, decks }, null, 1) + "\n"
+      );
     };
     const browser = await launchBrowser();
-    for (const name of names) {
+    const crashed = (
+      kind: "rules" | "llm-mock", sd: number, opponent: string, err: unknown
+    ): import("./cardpool.js").QualificationGame => ({
+      kind, seed: sd, opponent, status: "crashed", winner: null, hardErrors: 1, lint: 0,
+      invariantViolations: 0, auditFindings: null, invalidRecords: null,
+      firstProblem: `harness exception: ${String(err instanceof Error ? err.message : err).slice(0, 140)}`,
+    });
+    const qualifyDeck = async (name: string): Promise<void> => {
       const deck = await loadPrecon(repoRoot, name);
       const side = cards.get(deck.identity)?.side === "corp" ? "corp" as const : "runner" as const;
       const check = await pool.checkPool(repoRoot, [deck]);
@@ -665,58 +820,77 @@ if (command === "run-game") {
       const runnerPrecon = side === "corp" ? opponent : name;
       if (check.missing.length === 0) {
         for (const sd of seeds) {
-          const rec = await runGame(
-            { repoRoot, seed: sd, corpPrecon, runnerPrecon, extraParams: "&invariant=1" },
-            browser
-          );
-          const hard = pool.hardErrors(rec.errors);
-          const audit = await auditGameLog(name, rec.log, cardSide);
-          const auditFindings = audit.issues.length + audit.unknownCreditLines.length;
-          const v = rec.invariantViolations ?? [];
-          games.push({
-            kind: "rules", seed: sd, opponent, status: rec.status, winner: rec.winner,
-            hardErrors: hard.length, lint: rec.errors.length - hard.length,
-            invariantViolations: v.length, auditFindings, invalidRecords: null,
-            firstProblem:
-              rec.status !== "completed" ? `game ${rec.status}` :
-              hard[0]?.slice(0, 160) ??
-              (v[0] ? `leak: ${JSON.stringify(v[0]).slice(0, 140)}` : null) ??
-              (auditFindings ? `audit: ${(audit.issues[0]?.detail ?? audit.unknownCreditLines[0]?.text ?? "").slice(0, 140)}` : null),
-          });
+          try {
+            const rec = await runGame(
+              { repoRoot, seed: sd, corpPrecon, runnerPrecon, extraParams: "&invariant=1" },
+              browser
+            );
+            const hard = pool.hardErrors(rec.errors);
+            const audit = await auditGameLog(name, rec.log, cardSide);
+            const auditFindings = audit.issues.length + audit.unknownCreditLines.length;
+            const v = rec.invariantViolations ?? [];
+            games.push({
+              kind: "rules", seed: sd, opponent, status: rec.status, winner: rec.winner,
+              hardErrors: hard.length, lint: rec.errors.length - hard.length,
+              invariantViolations: v.length, auditFindings, invalidRecords: null,
+              firstProblem:
+                rec.status !== "completed"
+                  ? `game ${rec.status}${hard[0] ? `: ${hard[0].slice(0, 140)}` : ""}` :
+                hard[0]?.slice(0, 160) ??
+                (v[0] ? `leak: ${JSON.stringify(v[0]).slice(0, 140)}` : null) ??
+                (auditFindings ? `audit: ${(audit.issues[0]?.detail ?? audit.unknownCreditLines[0]?.text ?? "").slice(0, 140)}` : null),
+            });
+          } catch (err) {
+            games.push(crashed("rules", sd, opponent, err));
+          }
         }
         const sd = seeds[0]!;
-        const rec = await runLLMGame({
-          repoRoot, seed: sd, corpPrecon, runnerPrecon, seat: side, model: "mock",
-          rulesSource: "digest", profile: "neutral", reasoningStyle: "brief",
-          debrief: false, frames: false, extraParams: "&invariant=1",
-          outDir: join(outDir, "qualify"),
-        });
-        const hard = pool.hardErrors(rec.errors);
-        const v = rec.invariantViolations ?? [];
-        games.push({
-          kind: "llm-mock", seed: sd, opponent, status: rec.status, winner: rec.winner,
-          hardErrors: hard.length, lint: rec.errors.length - hard.length,
-          invariantViolations: v.length, auditFindings: null, invalidRecords: rec.invalidRecords,
-          firstProblem:
-            rec.status !== "completed" ? `mock ${side}-seat game ${rec.status}` :
-            hard[0]?.slice(0, 160) ??
-            (v[0] ? `leak: ${JSON.stringify(v[0]).slice(0, 140)}` : null) ??
-            (rec.invalidRecords ? `${rec.invalidRecords} invalid records` : null),
-        });
+        try {
+          const rec = await runLLMGame({
+            repoRoot, seed: sd, corpPrecon, runnerPrecon, seat: side, model: "mock",
+            rulesSource: "digest", profile: "neutral", reasoningStyle: "brief",
+            debrief: false, frames: false, extraParams: "&invariant=1",
+            outDir: join(outDir, "qualify"),
+          });
+          const hard = pool.hardErrors(rec.errors);
+          const v = rec.invariantViolations ?? [];
+          games.push({
+            kind: "llm-mock", seed: sd, opponent, status: rec.status, winner: rec.winner,
+            hardErrors: hard.length, lint: rec.errors.length - hard.length,
+            invariantViolations: v.length, auditFindings: null, invalidRecords: rec.invalidRecords,
+            firstProblem:
+              rec.status !== "completed"
+                ? `mock ${side}-seat game ${rec.status}${hard[0] ? `: ${hard[0].slice(0, 140)}` : ""}` :
+              hard[0]?.slice(0, 160) ??
+              (v[0] ? `leak: ${JSON.stringify(v[0]).slice(0, 140)}` : null) ??
+              (rec.invalidRecords ? `${rec.invalidRecords} invalid records` : null),
+          });
+        } catch (err) {
+          games.push(crashed("llm-mock", sd, opponent, err));
+        }
       }
       const qualified =
         check.missing.length === 0 &&
         games.every((g) => g.status === "completed" && g.hardErrors === 0 &&
           g.invariantViolations === 0 && !g.auditFindings && !g.invalidRecords);
       manifest.decks[name] = { side, sets: check.sets, qualified, games };
+      await writeManifest();
       console.log(
         `${qualified ? "✓" : "✗"} ${side.padEnd(6)} ${name.padEnd(40)} ` +
           (qualified ? "" : games.find((g) => g.firstProblem)?.firstProblem ??
             `${check.missing.length} unimplemented card(s)`)
       );
-    }
+    };
+    const queue = [...todo];
+    await Promise.all(
+      Array.from({ length: Math.min(jobs, queue.length) }, async () => {
+        for (let name = queue.shift(); name !== undefined; name = queue.shift()) {
+          await qualifyDeck(name);
+        }
+      })
+    );
     await browser.close();
-    await writeFile(join(repoRoot, pool.POOL_MANIFEST), JSON.stringify(manifest, null, 1) + "\n");
+    await writeManifest();
     const all = Object.values(manifest.decks);
     console.log(
       `\nqualified ${all.filter((d) => d.qualified).length}/${all.length} decks → ${pool.POOL_MANIFEST}`
@@ -740,8 +914,43 @@ if (command === "run-game") {
     }
   }
   process.exit(0);
+} else if (command === "selftest") {
+  // D11: fault injection — every checker must catch a planted defect of
+  // every class it claims, localized, and pass the clean original.
+  const { selftest, SUITES } = await import("./selftest.js");
+  const wanted = arg("suite", "") ? arg("suite", "").split(",") : SUITES;
+  const unknown = wanted.filter((x) => !(SUITES as string[]).includes(x));
+  if (unknown.length) {
+    console.error(`selftest: unknown suite(s) ${unknown.join(", ")} (have ${SUITES.join(", ")})`);
+    process.exit(2);
+  }
+  const outcomes = await selftest(repoRoot, outDir, wanted as typeof SUITES);
+  const failed = outcomes.filter((o) => !o.ok);
+  console.log(
+    failed.length === 0
+      ? `SELFTEST: all ${outcomes.length} checks passed (${wanted.join(", ")})`
+      : `SELFTEST: ${failed.length}/${outcomes.length} checks FAILED`
+  );
+  process.exit(failed.length === 0 ? 0 : 1);
 } else if (command === "audit") {
   const file = arg("file", "");
+  if (process.argv.includes("--review-sample")) {
+    // D11: a hand-verifiable packet of sampled checkpoints (needs --file).
+    if (!file) {
+      console.error("audit --review-sample N needs --file <game>");
+      process.exit(2);
+    }
+    const { reviewSample } = await import("./audit.js");
+    const n = parseInt(arg("review-sample", "12"), 10) || 12;
+    const out = await reviewSample(
+      repoRoot,
+      (await import("./paths.js")).resolveGameArtifacts(file).record,
+      n,
+      seed
+    );
+    console.log(`${out.samples} sampled checkpoints → ${out.outFile}`);
+    process.exit(0);
+  }
   const results = file
     ? [
         await auditFile(

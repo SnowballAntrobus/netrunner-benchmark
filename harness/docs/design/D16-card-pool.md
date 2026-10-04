@@ -1,0 +1,90 @@
+# D16 — The card pool: every precon, loaded on demand, qualified
+
+**Status: implemented** · PHASE1's progressive card pool ("start with
+System Gateway, expand to SU21, then Elevation"). Every one of the
+engine's 71 preconstructed decks is now playable by the harness, and a
+qualification run decides which of them are fit for benchmark games:
+the extended pool exposes real engine defects, and a crash or stall
+mid-game would corrupt the data.
+
+## Loading the sets a deck needs
+
+`harness.html` statically loads the base pool: System Gateway, System
+Update 2021 and the tutorial set, which every golden fixture uses.
+Decks built on other sets need those set files too. The page loads them
+on demand from `&sets=a,b`, `document.write`-ing them right after the
+base sets so the engine sees its usual load order. Base-pool games pass
+no parameter and load byte-identically to before (golden 10/10).
+
+`src/cardpool.ts` derives membership from the set files themselves
+(every `cardSet[N] =` / `coreSet[N] =` definition), never from a
+precon's self-declared `sets` field: the definitions are what the
+engine runs. `requiredSets` refuses a deck containing a card no set
+file defines (the engine would silently drop it). Every game path
+(`run-game`, `llm-game`, `run-match`, `replay --engine`, `frames`)
+computes and passes the sets, and the game record lists them in
+`cardSets`.
+
+<!-- POOL-COUNTS -->
+
+## What the extended pool broke, and what was fixed in the harness
+
+- **Audit coverage.** Elevation narrates some events differently:
+  ability announcements ("... triggered"), subroutine text with
+  `[credit]` where the base sets write `[c]`, "Side Hustle pays out N
+  credits", Account Siphon's summary line. Each new pattern was
+  verified against the card code and taught to the auditor; its
+  parser-coverage guard (unknown credit lines fail the audit) is what
+  surfaced them.
+- **Engine self-lint.** Some set files log `LogError: .x on Y should
+  not be automatic` (or "will be ignored because it is set to
+  automatic") at load, identically in rules-only games. These are
+  reported as lint, not counted as errors (`ENGINE_LINT`).
+- **A checker false positive.** Detente hosts a Corp card face up on
+  Runner hardware outside every zone the engine's `AllCards` walks, so
+  the invariant's census missed a visible copy and flagged its public
+  title. The census now includes hosted cards recursively (the check
+  itself was not loosened).
+
+## Qualification
+
+```sh
+npx tsx src/cli.ts pool --qualify [--jobs 3] [--seeds 1,2,3] [--only NAME] [--resume]
+```
+
+Per deck: three rules-vs-rules games against the Gateway reference
+opponent on seeds 1–3, with the no-cheating invariant on and the
+conservation audit run on each log, plus one mock game with the deck's
+own side as the model seat (exercising its cards' human branches under
+D14). A deck **qualifies** only if every game completes with no hard
+error, leak, audit finding or invalid record. Results go to
+`harness/fixtures/pool.json` (per deck: side, sets, qualified, and
+every game's outcome and first problem); the manifest is rewritten
+after each deck, so an interrupted run resumes with `--resume`.
+
+`llm-game` and `run-match` refuse a deck that failed (`--allow-unqualified`
+overrides) and warn about one never qualified; `smoke` skips failed
+decks; `pool` lists every deck with its sets and status; the project
+page shows the summary.
+
+<!-- POOL-RESULTS -->
+
+## Smoke testing the interface across the pool
+
+```sh
+npx tsx src/cli.ts smoke [--pool all|base|extended] [--seats rules,runner,corp,both] [--limit N]
+```
+
+Pairs every Corp precon with a Runner precon and plays each pairing as
+rules-vs-rules (serializer invariant) and with the mock in each
+requested seat mode (option-menu invariant, multi-select adapter,
+record validation). Any non-completed game, hard error, invalid record
+or invariant violation fails the run. Keyless.
+
+## Non-goals
+
+Fixing the engine defects behind refused decks (the engine is
+quarantined here; those fixes belong upstream), the set files no
+precon uses (Midnight Sun, Downfall, Uprising, Rebellion, Parhelion and
+others are loadable by `&sets=` but no deck draws on them), and
+deckbuilding.

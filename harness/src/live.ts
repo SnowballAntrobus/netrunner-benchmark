@@ -5,7 +5,9 @@
  *  Server-Sent Events stream, /live/events, carrying every LiveEvent the
  *  game emits (meta, decision, compaction, frame, end). A browser that
  *  connects late first receives the whole backlog, then follows the
- *  stream — so the URL can be opened at any point of the game.
+ *  stream — so the URL can be opened at any point of the game. Under
+ *  run-match the stream carries game after game; each new game's meta
+ *  event resets the backlog and the viewer.
  *
  *  The stream is a reviewer view: frames are omniscient board snapshots
  *  and decisions carry the full records. Nothing here ever reaches a
@@ -88,6 +90,9 @@ export async function startLiveViewer(
     url,
     push: (event: LiveEvent): void => {
       const chunk = `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`;
+      // A new game (next game of a run-match) starts a new backlog: a
+      // late-joining tab replays only the game in progress.
+      if (event.type === "meta") backlog.length = 0;
       backlog.push(chunk);
       for (const res of clients) send(res, chunk);
     },

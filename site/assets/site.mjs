@@ -122,7 +122,13 @@ async function main() {
     renderTable(data.games);
     renderPool(data.pool);
   } catch (err) {
-    $("#gallery").replaceChildren(el("li", "table-note", `Could not load the game index (${err}).`));
+    const msg = `Could not load the game index (${err}). Build it with \`npx tsx src/cli.ts site\`.`;
+    $("#gallery").replaceChildren(el("li", "table-note", msg));
+    const td = el("td", "table-note", msg);
+    td.colSpan = 7;
+    const tr = el("tr");
+    tr.appendChild(td);
+    $("#games-table tbody").replaceChildren(tr);
   }
 }
 

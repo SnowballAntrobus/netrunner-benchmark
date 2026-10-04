@@ -132,8 +132,8 @@ see, unless a visible copy exists). `llm-game --invariant` reports it;
   retry and fallback exercised per seat, compaction and debriefs per
   seat (CI: one run per mode).
 - `--invariant`: 0 violations for runner, corp and both (CI).
-- `smoke` over the whole pool, every seat mode: no crash, error,
-  invalid record or violation.
+- `smoke` over every qualified deck (D16), every seat mode: no crash,
+  error, invalid record or violation.
 - Golden, determinism, the rules-vs-rules invariant and the audit
   unchanged.
 
@@ -141,5 +141,7 @@ see, unless a visible copy exists). `llm-game --invariant` reports it;
 
 New games are **era 4**: the Runner's menus differ from era 3 exactly
 where fixes 1–3 apply (in the Gateway matchup: Mutual Favor and a few
-ability windows). Era-3 games remain in the corpus, reported separately
-as always.
+ability windows), plus one wording change made at close-out: the
+mulligan command `m` now carries a description like every other
+command, where era-3 menus showed the bare letter. Era-3 games remain in
+the corpus, reported separately as always.

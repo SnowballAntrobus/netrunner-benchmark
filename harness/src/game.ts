@@ -40,6 +40,7 @@ export interface GameRecord {
   invariantChecks?: number; // serialized-state checks performed (&invariant=1)
   invariantViolations?: object[]; // no-cheating violations found (&invariant=1)
   sampleState?: object | null; // one mid-game runner-view state (&invariant=1)
+  planted?: object | null; // D11 selftest: what &plant= injected, where
 }
 
 interface HarnessSurface {
@@ -190,17 +191,20 @@ export async function runGame(options: GameOptions, browser?: Browser): Promise<
             invariantChecks: number;
             invariantViolations: object[];
             sampleState: object | null;
+            planted: object | null;
           };
         }).__harness;
         return {
           checks: h.invariantChecks,
           violations: h.invariantViolations,
           sample: h.sampleState,
+          planted: h.planted,
         };
-      })) as { checks: number; violations: object[]; sample: object | null };
+      })) as { checks: number; violations: object[]; sample: object | null; planted: object | null };
       record.invariantChecks = inv.checks;
       record.invariantViolations = inv.violations;
       record.sampleState = inv.sample;
+      if (options.extraParams.includes("plant=")) record.planted = inv.planted;
     }
   } catch (e) {
     record.errors.push(`host: ${String(e)}`);

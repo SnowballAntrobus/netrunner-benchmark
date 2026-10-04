@@ -660,6 +660,7 @@ function setTitle() {
   sub.appendChild(seatChip("corp"));
   sub.appendChild(seatChip("runner"));
   const bits = [`seed ${m.seed}`];
+  if (m.match) bits.unshift(`match game ${m.match.index}/${m.match.of}`);
   if (m.winner) bits.push(`${m.winner} wins — ${m.reason}`);
   if (m.cardSets && m.cardSets.length) bits.push(`sets: ${m.cardSets.join(", ")}`);
   sub.appendChild(document.createTextNode(bits.join(" · ")));
@@ -742,6 +743,12 @@ function wirePopover() {
       return;
     }
     showPopover(t, e.clientX, e.clientY);
+  });
+  // Touch: a tap shows the card, a tap elsewhere hides it.
+  document.addEventListener("click", (e) => {
+    const t = e.target.closest ? e.target.closest(".card, .opt[data-id]") : null;
+    if (t) showPopover(t, e.clientX, e.clientY);
+    else $("#popover").hidden = true;
   });
   document.addEventListener("scroll", () => ($("#popover").hidden = true), true);
 }
@@ -844,10 +851,16 @@ async function startLive() {
   };
   src.addEventListener("meta", async (e) => {
     const { meta } = JSON.parse(e.data);
+    // A run-match stream carries game after game: each meta starts fresh.
+    rendered = false;
+    pendingFrames.length = 0;
+    state.idx = 0;
+    state.following = true;
     builder = new GameBuilder(
       {
         ...metaFromRecord({ ...meta, model: meta.models && (meta.models.runner || meta.models.corp) }),
         seats: Object.fromEntries(Object.entries(meta.models || {}).map(([s, m]) => [s, { model: m }])),
+        ...(meta.match ? { match: meta.match } : {}),
       },
       {}
     );
@@ -872,12 +885,14 @@ async function startLive() {
   src.addEventListener("decision", onRow);
   src.addEventListener("compaction", onRow);
   src.addEventListener("end", (e) => {
-    const { record } = JSON.parse(e.data);
+    const { record, more } = JSON.parse(e.data);
     if (!builder) return;
     Object.assign(builder.game.meta, metaFromRecord(record), { seats: builder.game.meta.seats });
     builder.finish({ winner: record.winner, reason: record.reason });
     refresh();
-    src.close();
+    setTitle();
+    // More games follow in a run-match: stay connected for the next meta.
+    if (!more) src.close();
   });
   src.onerror = () => {
     if (!builder) $("#game-title").textContent = "Waiting for a live game… (start one with llm-game --live)";

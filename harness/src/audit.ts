@@ -31,6 +31,20 @@ export interface AuditIssue {
   detail: string;
 }
 
+/** One step of the credit ledger, for the review-sample packet (D11).
+ *  Emitted by an optional observer — detection never depends on it. */
+export interface AuditTraceEvent {
+  line: number;
+  who: "corp" | "runner";
+  /** "set": setup/resync value; "delta": pool change; "checkpoint": the
+   *  engine's stated value next to the ledger's own (null = unchecked). */
+  kind: "set" | "delta" | "checkpoint";
+  delta?: number;
+  ledger: number | null;
+  stated?: number;
+  text: string;
+}
+
 export interface AuditResult {
   file: string;
   lines: number;
@@ -49,7 +63,8 @@ function amount(s: string): number {
 export async function auditGameLog(
   file: string,
   log: string[],
-  cardSide: Map<string, "corp" | "runner">
+  cardSide: Map<string, "corp" | "runner">,
+  trace?: (event: AuditTraceEvent) => void
 ): Promise<AuditResult> {
   const result: AuditResult = {
     file,
@@ -94,6 +109,7 @@ export async function auditGameLog(
     if ((m = line.match(/^SPOILER: (Corp|Runner) has (\d+) credit\(s\)/))) {
       const who = side(m[1]!);
       const stated = parseInt(m[2]!, 10);
+      trace?.({ line: i, who, kind: "checkpoint", ledger: pool[who], stated, text: line });
       if (pool[who] !== null) {
         result.creditChecks++;
         if (pool[who] !== stated) {
@@ -112,6 +128,8 @@ export async function auditGameLog(
     if (line.startsWith("Each player has taken five credits")) {
       pool.corp = 5;
       pool.runner = 5;
+      trace?.({ line: i, who: "corp", kind: "set", ledger: 5, text: line });
+      trace?.({ line: i, who: "runner", kind: "set", ledger: 5, text: line });
       continue;
     }
 
@@ -154,6 +172,7 @@ export async function auditGameLog(
     if ((m = line.match(/^(Corp|Runner) gained (one|\d+) credits?$/))) {
       const who = side(m[1]!);
       if (pool[who] !== null) pool[who]! += amount(m[2]!);
+      trace?.({ line: i, who, kind: "delta", delta: amount(m[2]!), ledger: pool[who], text: line });
       continue;
     }
     if ((m = line.match(/^(Corp|Runner) spent (one|\d+) temporary credits?$/))) {
@@ -168,11 +187,13 @@ export async function auditGameLog(
     if ((m = line.match(/^(Corp|Runner) spent (one|\d+) credits?$/))) {
       const who = side(m[1]!);
       if (pool[who] !== null) pool[who]! -= amount(m[2]!);
+      trace?.({ line: i, who, kind: "delta", delta: -amount(m[2]!), ledger: pool[who], text: line });
       continue;
     }
     if ((m = line.match(/^(Corp|Runner) lost (one|\d+|0) credits?$/))) {
       const who = side(m[1]!);
       if (pool[who] !== null && m[2] !== "0") pool[who]! -= amount(m[2]!);
+      trace?.({ line: i, who, kind: "delta", delta: m[2] === "0" ? 0 : -amount(m[2]!), ledger: pool[who], text: line });
       continue;
     }
     if ((m = line.match(/^(one|\d+) credits? taken from (.+)$/))) {
@@ -184,8 +205,9 @@ export async function auditGameLog(
           kind: "unattributable-take",
           detail: `credits taken from unknown card "${title}"`,
         });
-      } else if (pool[who] !== null) {
-        pool[who]! += amount(m[1]!);
+      } else {
+        if (pool[who] !== null) pool[who]! += amount(m[1]!);
+        trace?.({ line: i, who, kind: "delta", delta: amount(m[1]!), ledger: pool[who], text: line });
       }
       continue;
     }
@@ -276,4 +298,83 @@ export function reportAudit(results: AuditResult[]): number {
       : `AUDIT: ${failures}/${results.length} games have findings`
   );
   return failures === 0 ? 0 : 1;
+}
+
+/** D11 manual-review assist: N seeded-random checked credit checkpoints,
+ *  each with the log since that side's previous checkpoint, the
+ *  auditor's arithmetic, and the engine's stated value — a packet a human
+ *  can verify against the rulebook in minutes. */
+export async function reviewSample(
+  repoRoot: string,
+  path: string,
+  n: number,
+  seed: number
+): Promise<{ outFile: string; samples: number }> {
+  const cardSide = await buildCardSideMap(repoRoot);
+  const record = JSON.parse(await readFile(path, "utf-8")) as { log: string[] };
+  const events: AuditTraceEvent[] = [];
+  const result = await auditGameLog(path, record.log, cardSide, (e) => events.push(e));
+  // Checked checkpoints and the segment of ledger events leading to each.
+  const segments: { who: "corp" | "runner"; from: AuditTraceEvent; steps: AuditTraceEvent[]; at: AuditTraceEvent }[] = [];
+  const last: Record<"corp" | "runner", AuditTraceEvent | null> = { corp: null, runner: null };
+  const steps: Record<"corp" | "runner", AuditTraceEvent[]> = { corp: [], runner: [] };
+  for (const e of events) {
+    if (e.kind === "delta") {
+      steps[e.who].push(e);
+      continue;
+    }
+    if (e.kind === "checkpoint" && e.ledger !== null && last[e.who]) {
+      segments.push({ who: e.who, from: last[e.who]!, steps: steps[e.who], at: e });
+    }
+    last[e.who] = e;
+    steps[e.who] = [];
+  }
+  // Seeded pick without replacement (same LCG shape as the engine).
+  let s = (seed * 48271) % 2147483647 || 1;
+  const rand = (): number => (s = (s * 48271) % 2147483647) / 2147483647;
+  const pool = segments.map((_, i) => i);
+  const picked: number[] = [];
+  while (picked.length < Math.min(n, pool.length)) {
+    picked.push(pool.splice(Math.floor(rand() * pool.length), 1)[0]!);
+  }
+  picked.sort((a, b) => a - b);
+  const startOf = (e: AuditTraceEvent): number => (e.kind === "set" ? e.ledger! : e.stated!);
+  const out: string[] = [
+    `# Audit review sample — ${path.split(/[\\/]/).slice(-2).join("/")}`,
+    "",
+    `${picked.length} of ${segments.length} checked credit checkpoints, seeded (seed ${seed}). ` +
+      `Audit result for the whole game: ${result.issues.length} issue(s), ` +
+      `${result.unknownCreditLines.length} unparsed credit line(s), ${result.creditChecks} checkpoints.`,
+    "",
+    "For each sample: confirm every credit-relevant line in the excerpt is in the arithmetic " +
+      "(and nothing else is), that each delta matches the rules for that event, and that the " +
+      "expected value equals the engine's checkpoint.",
+    "",
+  ];
+  for (const [k, idx] of picked.entries()) {
+    const seg = segments[idx]!;
+    const who = seg.who === "corp" ? "Corp" : "Runner";
+    out.push(`## ${k + 1}. ${who} checkpoint at log line ${seg.at.line}`, "");
+    out.push(`Start: **${startOf(seg.from)}** (${seg.from.kind === "set" ? "game setup" : "previous checkpoint"}, line ${seg.from.line})`, "");
+    if (seg.steps.length === 0) out.push("- no credit events for this side");
+    let running = startOf(seg.from);
+    for (const st of seg.steps) {
+      running += st.delta ?? 0;
+      const d = st.delta ?? 0;
+      out.push(`- line ${st.line}: \`${st.text}\` → ${d >= 0 ? "+" : "−"}${Math.abs(d)} = ${running}`);
+    }
+    const ok = seg.at.ledger === seg.at.stated;
+    out.push("", `Expected **${seg.at.ledger}** · engine says **${seg.at.stated}** — ${ok ? "agree" : "**MISMATCH**"}`, "");
+    const from = seg.from.line + 1;
+    const to = seg.at.line;
+    const lines = record.log.slice(from, to + 1).map((l, j) => `${String(from + j).padStart(5)}  ${String(l).replace(/\n+$/, "")}`);
+    const shown = lines.length > 80 ? [...lines.slice(0, 40), "  ...  (excerpt trimmed)", ...lines.slice(-40)] : lines;
+    out.push("<details><summary>Log excerpt (lines " + from + "–" + to + ")</summary>", "", "```", ...shown, "```", "", "</details>", "");
+  }
+  const outFile = path.endsWith("record.json")
+    ? path.replace(/record\.json$/, "audit-sample.md")
+    : path.replace(/\.json$/, "-audit-sample.md");
+  const { writeFile } = await import("node:fs/promises");
+  await writeFile(outFile, out.join("\n"));
+  return { outFile, samples: picked.length };
 }

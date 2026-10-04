@@ -1,6 +1,12 @@
 # D12 — The 10-game run (M5 acceptance experiment)
 
-**Status: awaiting review** · Per Dante: the 10-game run deserves its
+**Status: vehicle and gates ready; the run itself is analysis, owned
+by the author.** `run-match` (D06 §1) is implemented, including
+`--repeat` for the within-seed arm and first-divergence reporting; the
+D11 selftest is green in CI; the D15 board viewer replaces D08 for
+visual inspection. Interface era 4 (D14) began after every game in
+the corpus, so the M5 run will be the first era-4 data. · Per
+Dante: the 10-game run deserves its
 own design — it is the first thing we produce that looks like a
 benchmark RESULT rather than a pipeline artifact, so its cost model,
 variance structure, and reporting deserve the same scrutiny the

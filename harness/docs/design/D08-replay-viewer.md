@@ -1,6 +1,9 @@
 # D08 — Replay viewer: the game on the real board, reasoning alongside
 
-**Status: awaiting review** · Supersedes D06 §2 (single-moment inspect):
+**Status: implemented; superseded as the review surface by D15** (the
+engine-free board viewer). This engine replay remains as `replay
+--engine` — the ground-truth rendering of any recorded position. ·
+Supersedes D06 §2 (single-moment inspect):
 review pain during game 2 showed the needed unit is the WHOLE game, and
 a replay is the designed inspector plus a stepper — the mechanism is
 identical, already verified (RC strings are executable JS; the engine's

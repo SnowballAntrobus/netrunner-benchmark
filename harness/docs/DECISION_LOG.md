@@ -171,16 +171,47 @@ stream:
 }
 ```
 
-## Corp (rules-AI) records
+## Rules-AI records (the seat no model plays)
 
 The opponent's decisions land in the same stream so per-game analysis has
-both sides, with three differences: `state` is null (the corp AI reads live
-globals; snapshotting its view every decision would double file size for
-data we don't analyze yet), `model`/`reasoning`/token fields are null, and
-`options` are described from the **corp's own view** — they can contain
-corp-private information (its hand, unrezzed ice identities). That is
-correct and safe: the JSONL is host-side analysis data and is never shown
-to the LLM. Do not paste corp records into a live LLM's context mid-game.
+both sides, with three differences: `state` is null (the rules AI reads
+live globals; snapshotting its view every decision would double file size
+for data we don't analyze yet), `model`/`reasoning`/token fields are null,
+and `options` are described from **that seat's own view**, so they can
+contain its private information (a Corp's hand and unrezzed ice
+identities, a Runner's grip). That is correct and safe: the JSONL is
+host-side analysis data and is never shown to a model. Do not paste the
+opponent's records into a live model's context mid-game.
+
+## Model seats on either side (D14)
+
+Since D14 a model can play the Corp (`llm-game --seat corp`) or both seats
+(`--seat both`). The record stream is unchanged in shape; what varies:
+
+- `record.json` names the model seats in `llmSeat` (`runner`, `corp` or
+  `both`; absent before D14 = `runner`) and keeps per-seat counters,
+  usage and cost in `seats.corp` / `seats.runner`. Top-level counters are
+  sums over model seats.
+- Every record of a model seat carries `state` and (when the API was
+  called) `model`; compaction records carry `seat`. Two-model games have
+  one transcript, compaction history and debrief per seat
+  (`debrief.json` = `{game_id, seats: [...]}`) and one
+  `system-prompt.<seat>.txt` per seat.
+- A multi-card selection (discard down to hand size, choose cards to
+  install) is asked one card at a time: each step's record carries
+  `multi_select: {slot, of, chosen}`.
+- `aiBranches: "neutral"` on the game record marks interface era 4: card
+  scripts treat model seats as human players, so no menu is pruned by the
+  rules AI's shortcuts.
+
+## Board snapshots (`frames.jsonl`, D15)
+
+Next to the decisions, `frames.jsonl` holds one omniscient board snapshot
+taken just before each decision record (field `seq`) plus a final one: all
+cards in all zones, with per-card visibility bits for each seat, counters,
+the run state, and the public log lines since the previous frame. The
+board viewer draws from it. It is a reviewer artifact only and never part
+of a model request; the model's view is the record's `state`.
 
 ## Things that trip people up
 

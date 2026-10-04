@@ -71,6 +71,10 @@
   // restores the era-3 behavior, where card code saw LLM seats as rules AI).
   var NEUTRALIZE = params.get("aibranches") !== "rules";
 
+  // D15: viewer frames on (&frames=1, set by the host). Rules-AI decisions
+  // carry their board snapshot in the log record (the opponent wrapper).
+  var FRAMES = params.get("frames") === "1";
+
   // The engine's utility.js overrides the global JSON.stringify with a
   // title-collapsing replacer (readable logs). Harness requests must keep
   // full structure — use the pristine stringify captured by harness.html
@@ -151,6 +155,7 @@
   // tooltips take precedence. "n" and "jack" are engine vernacular the
   // rulebooks never use — always translated.
   var COMMAND_GLOSSARY = {
+    m: "Mulligan (shuffle your starting hand back and draw 5 new cards)",
     n: "Continue / decline (take no action in this window)",
     jack: "Jack out (voluntarily end the run)",
     gain: "Basic action: gain 1 credit",
@@ -774,6 +779,16 @@
               reproductionCode: reproductionCode,
             };
             if (divergence) logged.previewDivergence = divergence;
+            // D15: the viewer's board for this decision, taken NOW — the
+            // log call below does not pause the game, so a snapshot taken
+            // later by the host would show a board that has moved on.
+            if (FRAMES && typeof window.__harness.snapshot === "function") {
+              try {
+                logged.frame = window.__harness.snapshot(seq, logged.logIndex);
+              } catch (e) {
+                /* a missing frame must never cost the decision record */
+              }
+            }
             window.__harnessLogDecision(stringify(logged));
           } catch (e) {
             /* logging must never break the game */

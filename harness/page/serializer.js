@@ -381,6 +381,65 @@
     return null;
   }
 
+  // ---- D11 selftest plants (&plant=<class>) -------------------------------
+  // Fault injection for `cli.ts selftest`: corrupts what a checker is about
+  // to scan — the freshly serialized state, its log tail, an LLM seat's
+  // menu JSON — ONCE per game, and records what was planted so the host
+  // can assert the checker caught it at that decision. The checkers' own
+  // code paths are untouched; without &plant every call here is a no-op.
+  var PLANT = params.get("plant");
+  var PLANT_AT = 30; // first decision eligible for the plant
+  window.__harness.planted = null;
+
+  // A title the viewer provably cannot see: hidden in the checker's own
+  // census with no visible copy anywhere. `ownVisible` mirrors the menu
+  // check's census (a seat's own cards count as known).
+  function plantableTitle(viewer, ownVisible) {
+    var visible = {};
+    var hidden = {};
+    var cards = everyCard();
+    for (var i = 0; i < cards.length; i++) {
+      var c = cards[i];
+      if (PlayerCanLook(viewer, c) || (ownVisible && c.player === viewer)) visible[c.title] = true;
+      else hidden[c.title] = true;
+    }
+    var titles = Object.keys(hidden).filter(function (t) { return !visible[t]; }).sort();
+    return titles.length ? titles[0] : null;
+  }
+
+  function plantState(side, state, log, decisionIndex) {
+    if (!PLANT || window.__harness.planted || side !== "runner" || decisionIndex < PLANT_AT) return;
+    if (PLANT === "hidden-title") {
+      var title = plantableTitle(runner, false);
+      if (!title) return;
+      state.planted = title;
+      window.__harness.planted = {
+        decision: decisionIndex, viewer: side, kind: "hidden-title-in-state",
+        detail: title, path: "state.planted",
+      };
+    } else if (PLANT === "private-log") {
+      var line = "SPOILER: planted private line (D11 selftest)";
+      log.push(line);
+      window.__harness.planted = {
+        decision: decisionIndex, viewer: side, kind: "private-log-line", detail: line,
+      };
+    }
+  }
+
+  function plantOptions(side, optionsJson, decisionIndex) {
+    if (PLANT !== "hidden-option" || window.__harness.planted || decisionIndex < PLANT_AT) {
+      return optionsJson;
+    }
+    var title = plantableTitle(side === "corp" ? corp : runner, true);
+    if (!title) return optionsJson;
+    window.__harness.planted = {
+      decision: decisionIndex, viewer: side, kind: "hidden-title-in-options", detail: title,
+    };
+    var stringifyFull =
+      (window.__pristineJSON && window.__pristineJSON.stringify) || JSON.stringify;
+    return optionsJson + stringifyFull({ planted: title });
+  }
+
   function checkViewer(side, decisionIndex) {
     var viewer = side === "corp" ? corp : runner;
     var state = stateFor(side);
@@ -399,6 +458,7 @@
         activePlayer: state.phase.activePlayer,
       };
     }
+    plantState(side, state, log, decisionIndex); // D11 selftest only (no-op otherwise)
     // Pristine stringify (harness.html): the engine's global override
     // collapses title-bearing objects — the structural scan must see the
     // full serialized structure, exactly as the host receives it.
@@ -504,7 +564,7 @@
       try {
         checkViewer("runner", d);
         checkViewer("corp", d);
-        checkOptions(side, optionsJson, d);
+        checkOptions(side, plantOptions(side, optionsJson, d), d);
       } catch (e) {
         window.__harness.invariantViolations.push({
           decision: d,
