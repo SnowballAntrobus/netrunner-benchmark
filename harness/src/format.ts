@@ -46,6 +46,7 @@ interface DecisionRow {
 
 interface CompactionRow {
   record_type: "compaction";
+  seat?: string; // D14 (absent = runner)
   compaction_id: number;
   seq_before: number;
   log_index?: number | null;
@@ -158,6 +159,11 @@ export async function formatGame(
   }
   const log = game.log.map((l) => String(l).replace(/\n+$/, "").trim());
 
+  // LLM-seat decisions anchor into the narration (D14: either seat, or
+  // both); rules-AI seats speak through their own "AI:" lines instead.
+  const llmSeatMode = (game["llmSeat"] as string | undefined) ?? "runner";
+  const llmSeats = new Set(llmSeatMode === "both" ? ["corp", "runner"] : [llmSeatMode]);
+
   // ---- anchor runner decisions into the log ------------------------------
   // Each runner record's state.log tail is the last ~30 PUBLIC lines at
   // decision time. Match its suffix against the public-filtered projection
@@ -200,7 +206,7 @@ export async function formatGame(
   const headerInfo = new Map<number, { number: number | null; ap: string | null }>();
   {
     const withIdx = decisions
-      .filter((d) => d.seat === "runner" && typeof d.log_index === "number" && d.state)
+      .filter((d) => llmSeats.has(d.seat) && typeof d.log_index === "number" && d.state)
       .sort((a, b) => (a.log_index as number) - (b.log_index as number));
     const bounds = [...boundaryAt.keys()].sort((a, b) => a - b);
     for (let i = 0; i < bounds.length; i++) {
@@ -237,7 +243,7 @@ export async function formatGame(
     compactionAt.set(at, bucket);
   }
 
-  const runnerDecisions = decisions.filter((d) => d.seat === "runner");
+  const runnerDecisions = decisions.filter((d) => llmSeats.has(d.seat));
   const anchors = new Map<number, DecisionRow[]>(); // raw log index → decisions
   let pubPtr = 0; // monotonic pointer into pub[]
   let lastAnchor = 0;
@@ -296,8 +302,13 @@ export async function formatGame(
   // ---- render ------------------------------------------------------------
   const turns = game["turns"] as { corp: number; runner: number } | null;
   const usage = game["usage"] as Record<string, number> | undefined;
+  const seatModels = (game["seats"] ?? {}) as Record<string, { model?: string }>;
+  const who = (seat: string): string =>
+    llmSeats.has(seat)
+      ? (seatModels[seat]?.model ?? (game["model"] as string | undefined) ?? "model")
+      : "rules AI";
   const header = [
-    `# ${game["model"] ?? "faceoff"} — seed ${game["seed"]}: ${game["corpPrecon"]} (Corp) vs ${game["runnerPrecon"]} (Runner)`,
+    `# ${game["model"] ?? "faceoff"} — seed ${game["seed"]}: ${game["corpPrecon"]} (Corp: ${who("corp")}) vs ${game["runnerPrecon"]} (Runner: ${who("runner")})`,
     "",
     `**Result:** ${game["winner"]} wins — ${game["reason"]} · ` +
       `**Score:** ${game["corpAgendaPoints"]}:${game["runnerAgendaPoints"]} (Corp:Runner AP) · ` +
@@ -322,12 +333,14 @@ export async function formatGame(
           : "")
       : "",
     "",
-    "Legend: 🏢 Corp turn · 🏃 Runner turn · 🤖 Corp rules-AI thinking · 💭 LLM reasoning · " +
+    "Legend: 🏢 Corp turn · 🏃 Runner turn · 🤖 rules-AI thinking · 💭 model reasoning · " +
       "🗜️ context compaction · ⚡ run · ✅ run successful · 🛑 run ends · 🏆 agenda · 💥 damage · ☠️ flatline · 🔌 rez",
     "",
     "---",
   ].join("\n");
 
+  // Two-model games tag each decision with its seat.
+  const seatTag = (d: DecisionRow): string => (llmSeats.size > 1 ? ` _${d.seat}_` : "");
   const renderDecision = (d: DecisionRow, full: boolean): string[] => {
     const forced = d.options.length === 1;
     const chosen = optionLabel(d.options[d.choice]);
@@ -352,14 +365,14 @@ export async function formatGame(
     if (forced && !full) {
       // Abbreviated view: substantive reasoning on a forced step surfaces
       // as a compact thought line; boilerplate was collapsed by the caller.
-      lines.push(`> 💭 **#${d.seq}** _${phaseName(d.phase)}:_ ${(d.reasoning ?? "").replace(/\n+/g, " ")}`, "");
+      lines.push(`> 💭 **#${d.seq}**${seatTag(d)} _${phaseName(d.phase)}:_ ${(d.reasoning ?? "").replace(/\n+/g, " ")}`, "");
       return lines;
     }
     // Reasoning FIRST, then the choice — mirroring both the temporal
     // truth (the model writes reasoning before choosing) and the corp's
     // thought→action presentation.
     if (d.reasoning && (!forced || full)) {
-      lines.push(`> 💭 **#${d.seq}** _${phaseName(d.phase)}:_ ${d.reasoning.replace(/\n+/g, " ")}`);
+      lines.push(`> 💭 **#${d.seq}**${seatTag(d)} _${phaseName(d.phase)}:_ ${d.reasoning.replace(/\n+/g, " ")}`);
     }
     lines.push(
       `> ↳ chose **${chosen}**` +
@@ -388,7 +401,7 @@ export async function formatGame(
         for (const c of compactionsHere) {
           flushForced();
           out.push(
-            `> 🗜️ **Compaction #${c.compaction_id}** _(before decision #${c.seq_before}: ` +
+            `> 🗜️ **Compaction #${c.compaction_id}**${llmSeats.size > 1 ? ` _${c.seat ?? "runner"}_` : ""} _(before decision #${c.seq_before}: ` +
               `~${c.transcript_tokens_before ?? "?"} tokens → summary + last ${c.kept_turns} ` +
               `exchanges verbatim; ${c.dropped_turns} exchanges compacted)_`,
             `> 📝 ${c.summary.replace(/\n+/g, " ")}`,
@@ -453,25 +466,32 @@ export async function formatGame(
   return { full: render(true) };
 }
 
-// D07: debrief artifact rendered at the end of the narrative. Resolved
+// D07: debrief artifact(s) rendered at the end of the narrative. Resolved
 // through the artifact layout (nested run folder or legacy flat stem).
+// D14: two-model games carry one debrief per seat ({seats: [...]}).
 async function debriefSection(gamePath: string): Promise<string> {
   try {
-    const d = JSON.parse(
-      await readFile(resolveGameArtifacts(gamePath).debrief, "utf-8")
-    ) as {
+    interface DebriefEntry {
+      seat?: string;
+      model?: string;
       instrument_version: number;
       text: string;
-    };
-    return [
-      "",
-      "---",
-      "",
-      `## 🎤 Debrief _(instrument v${d.instrument_version}; the model's own words, from its final transcript — a self-report, not ground truth)_`,
-      "",
-      d.text,
-      "",
-    ].join("\n");
+    }
+    const raw = JSON.parse(
+      await readFile(resolveGameArtifacts(gamePath).debrief, "utf-8")
+    ) as DebriefEntry & { seats?: DebriefEntry[] };
+    const entries: DebriefEntry[] = raw.seats ?? [raw];
+    const out: string[] = ["", "---", ""];
+    for (const d of entries) {
+      const whose = entries.length > 1 ? ` — ${d.seat ?? "runner"}${d.model ? ` (${d.model})` : ""}` : "";
+      out.push(
+        `## 🎤 Debrief${whose} _(instrument v${d.instrument_version}; the model's own words, from its final transcript — a self-report, not ground truth)_`,
+        "",
+        d.text,
+        ""
+      );
+    }
+    return out.join("\n");
   } catch {
     return ""; // no debrief artifact — nothing to append
   }

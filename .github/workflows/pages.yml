@@ -1,0 +1,62 @@
+name: Publish GitHub Pages
+
+# Publishing is manual while the site is being prepared (Actions → Publish
+# GitHub Pages → Run workflow). To publish on every push, add:
+#   push:
+#     branches: [dev]
+#     paths: ["site/**", "harness/data/games/**"]
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    if: github.ref == format('refs/heads/{0}', github.event.repository.default_branch)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: harness/package-lock.json
+
+      # site/data/ (game gallery, results tables, viewer bundles) is derived
+      # from the tracked corpus in harness/data/games — built here so it
+      # always matches the records. No browser needed.
+      - name: Build site data
+        working-directory: harness
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+        run: |
+          npm ci
+          npx tsx src/cli.ts site
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload static site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

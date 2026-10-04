@@ -1,9 +1,16 @@
-/** System prompt for the LLM Runner (PHASE1 M4).
+/** System prompts for the LLM seats (PHASE1 M4; Corp seat since D14).
  *
  *  Static per game (rules digest + interface guide + both decklists), so it
  *  is sent with a prompt-cache breakpoint — ~300+ decisions per game reuse
- *  the cached prefix.
+ *  the cached prefix. Every Runner-seat string is unchanged from era 3 (a
+ *  Runner vs rules-Corp prompt is byte-identical); the Corp seat gets
+ *  parallel texts written to the same standard, and the opponent is only
+ *  ever characterized by the `expert` profile.
  */
+
+export type Seat = "runner" | "corp";
+/** Who sits across the table: the engine's rules AI, or another model. */
+export type OpponentKind = "rules" | "model";
 
 export const RULES_DIGEST = `# Android: Netrunner — rules digest (NSG / System Gateway era)
 
@@ -61,6 +68,58 @@ runners). Keep enough credits to break what you expect plus surprises, and
 enough grip cards to survive damage. Icebreakers in play beat icebreakers
 in hand; install your breaker suite before committing to expensive runs.`;
 
+export const CORP_RULES_DIGEST = `# Android: Netrunner — rules digest (NSG / System Gateway era)
+
+You are playing the CORP against the RUNNER. You install cards facedown in
+servers and protect them with ice; the Runner makes runs to breach your
+servers and steal agendas.
+
+## Winning
+First to 7 agenda points wins. You score agendas by advancing them in a
+remote server until their advancement counters meet the agenda's
+advancement requirement; the Runner steals agendas by accessing them
+during runs. You also win if the Runner takes more damage than cards in
+their grip (flatline). You LOSE if you must draw from an empty R&D.
+
+## Your turn
+Your turn begins with a mandatory draw, then you get 3 clicks. Basic
+actions (1 click each): gain 1 credit; draw 1 card; install an agenda,
+asset, upgrade or piece of ice (installing ice costs 1 credit for each ice
+already protecting that server); play an operation; advance an installed
+card (also costs 1 credit); trash a resource while the Runner is tagged
+(also costs 2 credits); use a card ability marked with a click cost.
+Purging virus counters takes all 3 clicks. At end of turn, discard down to
+your maximum hand size (normally 5).
+
+## The Runner's turn
+The Runner gets 4 clicks: gain credits, draw, install programs, hardware
+and resources, play events, remove tags, and make runs on your servers.
+
+## Servers, ice and runs
+Central servers: HQ (your hand), R&D (your deck), Archives (your discard
+pile). Each remote server holds at most one agenda or asset, plus any
+number of upgrades, behind the ice installed in front of it. A run
+approaches the OUTERMOST ice first. When the Runner approaches a piece of
+unrezzed ice you may rez it (paying its rez cost); rezzed ice is
+encountered and its subroutines fire unless the Runner breaks them with
+icebreakers. Assets and upgrades are installed facedown and may be rezzed
+later (for example, as the Runner approaches the server). If the Runner
+passes all ice they breach the server and access cards: they steal
+agendas, may pay trash costs to trash assets and upgrades, and suffer the
+effects of ambushes they access.
+
+## Economy and hazards
+Credits pay for rezzing, installing ice, advancing and operations. Tags on
+the Runner let you trash their resources and power tag-punishment cards.
+Each bad publicity you have gives the Runner 1 extra credit for every run.
+
+## Strategic basics
+Build a scoring remote protected by ice, and keep enough credits to rez
+ice when the Runner runs. Advance agendas when the Runner cannot afford to
+break into the server, or bluff with advanced ambushes. Protect HQ and R&D
+enough that the Runner cannot freely access agendas from them, and use
+economy assets to stay ahead on credits.`;
+
 export interface PromptProfile {
   name: string;
   framing: string;
@@ -94,9 +153,36 @@ export const PROFILES: Record<string, Omit<PromptProfile, "reasoningStyle">> = {
   },
 };
 
+/** The profile's framing sentence for a seat. Runner vs the rules AI is
+ *  exactly the profile's stored text (era-3 comparability); other seats
+ *  and opponents get the same sentence with the roles swapped. */
+export function framingFor(
+  profile: Omit<PromptProfile, "reasoningStyle">,
+  seat: Seat = "runner",
+  opponent: OpponentKind = "rules"
+): string {
+  if (seat === "runner" && opponent === "rules") return profile.framing;
+  const role = seat === "runner" ? "Runner" : "Corp";
+  if (profile.name === "neutral") {
+    return `You are playing Android: Netrunner as the ${role}. Your objective is to win the game.`;
+  }
+  const against =
+    opponent === "model"
+      ? "another AI model"
+      : `a rules-based ${seat === "runner" ? "Corp" : "Runner"} AI`;
+  return (
+    `You are an expert Android: Netrunner player controlling the ${role} ` +
+    `in a harnessed game against ${against}. Play to win.`
+  );
+}
+
 export const STRATEGY_HINT_DECKLIST =
   "The Corp's decklist above tells you what ice, ambushes and agendas may\n" +
   "be hidden behind facedown cards — reason about probabilities from it.";
+
+export const CORP_STRATEGY_HINT_DECKLIST =
+  "The Runner's decklist above tells you which icebreakers, events and\n" +
+  "economy they may draw — reason about probabilities from it.";
 
 export const REASONING_DIRECTIVES: Record<PromptProfile["reasoningStyle"], string> = {
   brief:
@@ -161,6 +247,65 @@ FIRST, then the "option" index — your reasoning should produce the choice,
 not justify it afterwards.
 - option: the integer index of your choice`;
 
+/** D14: the Corp seat's interface guide — the Runner guide's structure
+ *  and standards, with the Corp's commands and point of view. */
+export const CORP_INTERFACE_GUIDE = `# How you play (harness interface)
+
+Each decision you receive contains: the current game state as JSON (your
+full view — hidden Runner cards appear as {"hidden": true}), the recent
+public game log (with "=== turn ===" markers), and a numbered list of LEGAL
+options. You MUST pick exactly one option index. The engine enumerates
+legality for you — every listed option is legal; nothing else is possible.
+
+Decision types:
+- "command": top-level actions. Common commands: "gain" = click for 1
+  credit; "draw" = click to draw; "install" = install a card from HQ into
+  a server; "play" = play an operation; "advance" = place an advancement
+  counter on an installed card; "rez" = rez a card, paying its rez cost;
+  "score" = score an agenda whose advancement requirement is met;
+  "trigger" = use a card ability; "trash" = trash a resource while the
+  Runner is tagged; "purge" = remove all virus counters; "n" = continue /
+  decline / pass priority (very common — choose it when you don't want to
+  act in a response window).
+- "select": choose the parameter for the action (which card, which server,
+  which subroutine, etc.). Option entries carry the card/server details.
+ACTIONS_MODE_PARAGRAPH
+
+Your state JSON shows "run" context while the Runner is making a run. Ice
+positions count from the server: position 0 is the INNERMOST piece; a
+run encounters the outermost (highest position) first and works inward.
+Your own installed and archived cards are fully visible to you even
+while facedown to the Runner: "rezzed": false or "faceUp": false marks
+what the Runner cannot see.LOG_PERSPECTIVE_NOTE
+
+Notation: card text and log lines use bracket icons: [c] = credit,
+[click] = click, [sub] = subroutine, [mu] = memory unit, [trash] = trash
+symbol, [recurring] = recurring credit. Three state terms not covered by
+the learn-to-play guides, per the Comprehensive Rules (v26.03): "core
+damage" — suffered by the Runner like other damage (1 random card trashed
+from their grip per point) and each core damage also reduces their
+maximum hand size by 1 for the rest of the game; the Runner is flatlined
+if damage exceeds cards in their grip, or at their discard step if their
+maximum hand size is below 0 (CR 10.4, 1.7.2b). "bad publicity" — when
+the Runner initiates a run they gain 1 bad publicity credit per bad
+publicity you have, spendable only during that run (CR 10.6, 6.3.3).
+"link" — the Runner's link strength opposes your trace strength when a
+trace attempt resolves; if your trace strength exceeds their link
+strength the trace succeeds (CR 10.7, 10.8).
+
+Respond ONLY via the choose_option tool. Write the "reasoning" field
+FIRST, then the "option" index — your reasoning should produce the choice,
+not justify it afterwards.
+- option: the integer index of your choice`;
+
+/** D14: when both seats are models the page renders as the Runner (the
+ *  shared log must stay Runner-honest), so the Corp is told how its own
+ *  cards appear in the narration — mechanics disclosure only. */
+export const CORP_SHARED_LOG_NOTE = `
+The game log is written from the Runner's point of view: your own cards
+appear in it as "hidden card" until they are rezzed or revealed. The
+state JSON and your options always show your full view.`;
+
 /** Appended to the interface guide in conversational mode (D01): honest
  *  mechanics disclosure only — how the model's memory works, no advice on
  *  what to do with it. */
@@ -191,38 +336,80 @@ export const ACTIONS_PARAGRAPHS = {
     'actions arrive as chains: e.g. command "run" then select the server.',
 };
 
-export function buildSystemPrompt(
-  runnerReference: string,
-  corpReference: string,
-  rulesText: string = RULES_DIGEST,
-  profile: PromptProfile = { ...PROFILES["neutral"]!, reasoningStyle: "brief" },
-  contextMode: "conversational" | "stateless" = "conversational",
-  actionsMode: "compound" | "split" = "compound"
-): string {
+export interface SystemPromptOptions {
+  /** Card reference for the seat's own deck, then the opponent's. */
+  ownReference: string;
+  opponentReference: string;
+  /** Default: the seat's digest (RULES_DIGEST / CORP_RULES_DIGEST). */
+  rulesText?: string;
+  profile?: PromptProfile;
+  contextMode?: "conversational" | "stateless";
+  actionsMode?: "compound" | "split";
+  seat?: Seat;
+  opponent?: OpponentKind;
+  /** D14: the page narrates from the Runner's view (both seats are models)
+   *  — the Corp guide then discloses how its own cards appear in the log. */
+  runnerPerspectiveLog?: boolean;
+}
+
+/** D14: the Corp seat's actions-mode paragraph (same protocol, Corp verbs). */
+export const CORP_ACTIONS_PARAGRAPHS = {
+  compound:
+    "\nCommand options that carry a subject are COMPLETE actions: choosing\n" +
+    '"install" with a named card and server installs that card there ("new\n' +
+    'server" creates a remote); "advance", "rez" or "score" with a named card\n' +
+    'acts on that card; "trigger" with an ability uses it. Some entries also\n' +
+    'carry a "then" field showing the follow-up step they commit to —\n' +
+    "choosing such an entry performs both steps. Follow-up \"select\" decisions\n" +
+    "appear only when a further choice remains (which card to trash, which\n" +
+    "subroutine effect to apply, and so on).",
+  split:
+    "\nCommand options that lead to a follow-up choice include a \"choices\"\n" +
+    "list previewing that follow-up menu (e.g. \"install\" lists each card\n" +
+    "and server you could install it in). Previews are computed at the\n" +
+    "moment the menu is shown; the follow-up decision itself is\n" +
+    'authoritative. Multi-step actions arrive as chains: e.g. command\n' +
+    '"advance" then select the card.',
+};
+
+export function buildSystemPrompt(options: SystemPromptOptions): string {
+  const seat = options.seat ?? "runner";
+  const opponent = options.opponent ?? "rules";
+  const profile = options.profile ?? { ...PROFILES["neutral"]!, reasoningStyle: "brief" };
+  const contextMode = options.contextMode ?? "conversational";
+  const actionsMode = options.actionsMode ?? "compound";
+  const digest = seat === "runner" ? RULES_DIGEST : CORP_RULES_DIGEST;
   // The digest's "Strategic basics" section is harness-authored advice;
   // strip it under hint-free profiles. Official rules text keeps its own
   // strategy content — that is part of the official-text neutrality choice.
-  let rules = rulesText;
-  if (!profile.strategyHints && rules === RULES_DIGEST) {
+  let rules = options.rulesText ?? digest;
+  if (!profile.strategyHints && rules === digest) {
     rules = rules.split("## Strategic basics")[0]!.trimEnd();
   }
+  const guide =
+    seat === "runner"
+      ? INTERFACE_GUIDE.replace("ACTIONS_MODE_PARAGRAPH", ACTIONS_PARAGRAPHS[actionsMode])
+      : CORP_INTERFACE_GUIDE.replace(
+          "ACTIONS_MODE_PARAGRAPH",
+          CORP_ACTIONS_PARAGRAPHS[actionsMode]
+        ).replace("LOG_PERSPECTIVE_NOTE", options.runnerPerspectiveLog ? CORP_SHARED_LOG_NOTE : "");
   const parts = [
-    profile.framing,
+    framingFor(profile, seat, opponent),
     "",
     rules,
     "",
-    INTERFACE_GUIDE.replace("ACTIONS_MODE_PARAGRAPH", ACTIONS_PARAGRAPHS[actionsMode]) +
-      (contextMode === "conversational" ? CONVERSATIONAL_NOTE : ""),
+    guide + (contextMode === "conversational" ? CONVERSATIONAL_NOTE : ""),
     REASONING_DIRECTIVES[profile.reasoningStyle],
     "",
     "# Card reference (open decklists)",
     "",
-    runnerReference,
+    options.ownReference,
     "",
-    corpReference,
+    options.opponentReference,
   ];
   if (profile.strategyHints) {
-    parts.push("", STRATEGY_HINT_DECKLIST.replace(/\\n/g, "\n"));
+    const hint = seat === "runner" ? STRATEGY_HINT_DECKLIST : CORP_STRATEGY_HINT_DECKLIST;
+    parts.push("", hint.replace(/\\n/g, "\n"));
   }
   return parts.join("\n");
 }
@@ -259,6 +446,8 @@ export interface PageDecisionRequest {
   orderFolded?: boolean;
   /** D09-2: fused menu length when at/over the alert threshold. */
   largeMenu?: number;
+  /** D14: one step of a card-by-card multi-select — shown to the model. */
+  multiSelect?: { slot: number; of: number; chosen: unknown[] };
 }
 
 function decisionHeader(request: PageDecisionRequest): string {
@@ -271,6 +460,23 @@ function decisionHeader(request: PageDecisionRequest): string {
   return `Decision #${request.seq} — ${turn}, phase ${phase}, type ${request.decisionType}.`;
 }
 
+/** D14: the multi-select step line — present only on those decisions, so
+ *  every other decision message is unchanged. */
+function multiSelectLine(request: PageDecisionRequest): string[] {
+  const m = request.multiSelect;
+  if (!m) return [];
+  const chosen = m.chosen.length
+    ? ` (chosen so far: ${m.chosen.map((c) => JSON.stringify(c)).join(", ")})`
+    : "";
+  return [
+    `MULTI-SELECT, card ${m.slot} of up to ${m.of}${chosen}: this prompt ` +
+      "selects several cards, one per decision. Picking a card adds it to the " +
+      "selection; an option without a card (if offered) finishes the selection " +
+      "with the cards chosen so far.",
+    "",
+  ];
+}
+
 export function buildDecisionMessage(request: PageDecisionRequest): string {
   return [
     decisionHeader(request),
@@ -278,6 +484,7 @@ export function buildDecisionMessage(request: PageDecisionRequest): string {
     "GAME STATE (your view):",
     JSON.stringify(request.state),
     "",
+    ...multiSelectLine(request),
     "LEGAL OPTIONS:",
     ...request.options.map((o, i) => `${i}: ${JSON.stringify(o)}`),
     "",
@@ -294,6 +501,7 @@ export function buildLeanDecisionMessage(request: PageDecisionRequest): string {
   return [
     decisionHeader(request),
     "",
+    ...multiSelectLine(request),
     "LEGAL OPTIONS:",
     ...request.options.map((o, i) => `${i}: ${JSON.stringify(o)}`),
   ].join("\n");

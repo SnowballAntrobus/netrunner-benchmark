@@ -39,9 +39,13 @@
     return out;
   }
 
-  function cardEntry(card, viewer) {
+  // `reveal` (D14): the viewer is SEARCHING its own deck (Mutual Favor's
+  // stack search, a Corp R&D tutor) — searching means looking, which the
+  // engine's PlayerCanLook doesn't model. Only llmplayer.js passes it, for
+  // menu entries naming cards in the deciding seat's own stack/R&D.
+  function cardEntry(card, viewer, reveal) {
     if (!card) return null;
-    var visible = PlayerCanLook(viewer, card);
+    var visible = !!reveal || PlayerCanLook(viewer, card);
     var entry;
     if (visible) {
       entry = {
@@ -317,10 +321,12 @@
   }
 
   window.__harness.stateFor = stateFor;
+  // The public-narration filter, shared with snapshot.js (live viewer log).
+  window.__harness.isPublicLogLine = isPublicLogLine;
   // Card/option description helper for llmplayer.js — same PlayerCanLook
   // honesty as the rest of the serializer.
-  window.__harness.cardEntry = function (card, side) {
-    return cardEntry(card, side === "corp" ? corp : runner);
+  window.__harness.cardEntry = function (card, side, reveal) {
+    return cardEntry(card, side === "corp" ? corp : runner, !!reveal);
   };
 
   // ---- no-cheating invariant (&invariant=1) -------------------------------
@@ -341,7 +347,97 @@
         all = all.concat(p.identityCard.setAsideCards);
       }
     });
+    // Hosted cards (D16): the serializer reaches them through `hosted`,
+    // and some live outside every zone AllCards walks — Detente hosts a
+    // Corp card faceup on Runner hardware, "not installed". Without them
+    // the census missed a visible copy and flagged its public title.
+    var seen = [];
+    var addHosted = function (cards) {
+      for (var i = 0; i < cards.length; i++) {
+        var c = cards[i];
+        if (!c || seen.indexOf(c) !== -1) continue;
+        seen.push(c);
+        if (c.hostedCards && c.hostedCards.length) {
+          all = all.concat(c.hostedCards);
+          addHosted(c.hostedCards);
+        }
+      }
+    };
+    addHosted(all.slice());
     return all;
+  }
+
+  // Diagnostics only: the JSON path of the first string containing
+  // `needle` — makes a violation report say WHERE the title leaked.
+  function pathOf(value, needle, path) {
+    if (typeof value === "string") return value.indexOf(needle) !== -1 ? path : null;
+    if (value && typeof value === "object") {
+      for (var k in value) {
+        if (!Object.prototype.hasOwnProperty.call(value, k)) continue;
+        var found = pathOf(value[k], needle, path + (Array.isArray(value) ? "[" + k + "]" : "." + k));
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  // ---- D11 selftest plants (&plant=<class>) -------------------------------
+  // Fault injection for `cli.ts selftest`: corrupts what a checker is about
+  // to scan — the freshly serialized state, its log tail, an LLM seat's
+  // menu JSON — ONCE per game, and records what was planted so the host
+  // can assert the checker caught it at that decision. The checkers' own
+  // code paths are untouched; without &plant every call here is a no-op.
+  var PLANT = params.get("plant");
+  var PLANT_AT = 30; // first decision eligible for the plant
+  window.__harness.planted = null;
+
+  // A title the viewer provably cannot see: hidden in the checker's own
+  // census with no visible copy anywhere. `ownVisible` mirrors the menu
+  // check's census (a seat's own cards count as known).
+  function plantableTitle(viewer, ownVisible) {
+    var visible = {};
+    var hidden = {};
+    var cards = everyCard();
+    for (var i = 0; i < cards.length; i++) {
+      var c = cards[i];
+      if (PlayerCanLook(viewer, c) || (ownVisible && c.player === viewer)) visible[c.title] = true;
+      else hidden[c.title] = true;
+    }
+    var titles = Object.keys(hidden).filter(function (t) { return !visible[t]; }).sort();
+    return titles.length ? titles[0] : null;
+  }
+
+  function plantState(side, state, log, decisionIndex) {
+    if (!PLANT || window.__harness.planted || side !== "runner" || decisionIndex < PLANT_AT) return;
+    if (PLANT === "hidden-title") {
+      var title = plantableTitle(runner, false);
+      if (!title) return;
+      state.planted = title;
+      window.__harness.planted = {
+        decision: decisionIndex, viewer: side, kind: "hidden-title-in-state",
+        detail: title, path: "state.planted",
+      };
+    } else if (PLANT === "private-log") {
+      var line = "SPOILER: planted private line (D11 selftest)";
+      log.push(line);
+      window.__harness.planted = {
+        decision: decisionIndex, viewer: side, kind: "private-log-line", detail: line,
+      };
+    }
+  }
+
+  function plantOptions(side, optionsJson, decisionIndex) {
+    if (PLANT !== "hidden-option" || window.__harness.planted || decisionIndex < PLANT_AT) {
+      return optionsJson;
+    }
+    var title = plantableTitle(side === "corp" ? corp : runner, true);
+    if (!title) return optionsJson;
+    window.__harness.planted = {
+      decision: decisionIndex, viewer: side, kind: "hidden-title-in-options", detail: title,
+    };
+    var stringifyFull =
+      (window.__pristineJSON && window.__pristineJSON.stringify) || JSON.stringify;
+    return optionsJson + stringifyFull({ planted: title });
   }
 
   function checkViewer(side, decisionIndex) {
@@ -362,6 +458,7 @@
         activePlayer: state.phase.activePlayer,
       };
     }
+    plantState(side, state, log, decisionIndex); // D11 selftest only (no-op otherwise)
     // Pristine stringify (harness.html): the engine's global override
     // collapses title-bearing objects — the structural scan must see the
     // full serialized structure, exactly as the host receives it.
@@ -387,6 +484,7 @@
           viewer: side,
           kind: "hidden-title-in-state",
           detail: title,
+          path: pathOf(state, title, "state"),
           phase: currentPhase
             ? currentPhase.identifier + " / " + currentPhase.title
             : null,
@@ -421,7 +519,61 @@
     window.__harness.invariantChecks++;
   }
 
+  // D14: the option-menu half of the invariant. Menus shown to an LLM seat
+  // are built by llmplayer.js from engine option objects (labels come from
+  // the engine's own GetTitle masking, card entries from cardEntry), so they
+  // get the same structural test as the state: no title of an OPPONENT card
+  // the seat cannot see, unless a same-titled copy is legitimately visible.
+  // (The seat's own cards are excluded: its own facedown cards and the
+  // own-deck search reveal are its knowledge by rule.)
+  function checkOptions(side, optionsJson, decisionIndex) {
+    var viewer = side === "corp" ? corp : runner;
+    var stringifyFull =
+      (window.__pristineJSON && window.__pristineJSON.stringify) || JSON.stringify;
+    var visibleTitles = {};
+    var hiddenTitles = {};
+    var cards = everyCard();
+    for (var i = 0; i < cards.length; i++) {
+      var c = cards[i];
+      if (PlayerCanLook(viewer, c) || c.player === viewer) visibleTitles[c.title] = true;
+      else hiddenTitles[c.title] = true;
+    }
+    for (var title in hiddenTitles) {
+      if (visibleTitles[title]) continue;
+      if (optionsJson.indexOf(stringifyFull(title).slice(1, -1)) !== -1) {
+        window.__harness.invariantViolations.push({
+          decision: decisionIndex,
+          viewer: side,
+          kind: "hidden-title-in-options",
+          detail: title,
+          phase: currentPhase
+            ? currentPhase.identifier + " / " + currentPhase.title
+            : null,
+        });
+      }
+    }
+    window.__harness.invariantChecks++;
+  }
+
   if (params.get("invariant")) {
+    // D14: LLM seats have no rules-AI entry point to wrap — llmplayer.js
+    // calls this at each of its decisions (both viewers' state + the
+    // seat's own menu), so model-vs-model games are covered too.
+    window.__harness.invariantAtLLMDecision = function (side, optionsJson) {
+      var d = window.__harness.decisions;
+      try {
+        checkViewer("runner", d);
+        checkViewer("corp", d);
+        checkOptions(side, plantOptions(side, optionsJson, d), d);
+      } catch (e) {
+        window.__harness.invariantViolations.push({
+          decision: d,
+          viewer: side,
+          kind: "serializer-error",
+          detail: String(e && e.stack ? e.stack : e).slice(0, 300),
+        });
+      }
+    };
     var wrapForInvariant = function (ai) {
       if (!ai || !ai.prototype) return;
       ["CommandChoice", "SelectChoice"].forEach(function (m) {

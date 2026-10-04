@@ -16,8 +16,8 @@ instrument behaved. Rules conformance is the sibling skill
 Before writing anything, read the accumulated exemplars — the review
 corpus grows and your output must extend it, not reset it:
 
-- `harness/docs/GAME1_REVIEW.md`, `GAME2_REVIEW.md`,
-  `OPUS_GAME_REVIEW.md`, and any newer `*_REVIEW.md`
+- `harness/docs/GAME1_REVIEW.md`, `OPUS_GAME_REVIEW.md`, and any newer
+  `*_REVIEW.md`
 - any human notes files the user provides or that sit alongside a
   report (`*Notes.md`) — these are the ground truth for what the
   human reviewer cares about and for the expected adjudication style
@@ -33,8 +33,17 @@ notes respectfully corrected with evidence, findings classified, and a
 - `harness/out/<game_id>/` (or `harness/data/games/<game_id>/`):
   `record.json` (counters, usage, full log), `decisions.jsonl`
   (per-decision records, both seats), `debrief.json` (postgame
-  self-report; v2+: `final_events` catch-up + verdict). Legacy flat
-  games use `<game_id>.json` / `.jsonl` / `-debrief.json` stems.
+  self-report; v2+: `final_events` catch-up + verdict), `frames.jsonl`
+  (board snapshots). Legacy flat games use `<game_id>.json` / `.jsonl`
+  / `-debrief.json` stems.
+- Which seats a model played: `record.llmSeat` (`runner`, `corp` or
+  `both`; absent = `runner`) and per-seat counters in `record.seats`.
+  In two-model games review each seat's play and memos separately, and
+  read `debrief.json` as `{seats: [...]}`. The interface era matters
+  for any comparison: `aiBranches: "neutral"` = era 4 (D14).
+- The board at any decision: `npx tsx src/cli.ts replay --file <run>
+  --step N --screenshot board.png` (or `#seq=` in the viewer) — use it
+  to check claims about the board instead of reconstructing it.
 - `harness/data/CORPUS.md` — the cumulative report; place this game
   against it
 - optionally: the human's manual notes on the formatted report

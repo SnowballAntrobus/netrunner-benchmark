@@ -1,6 +1,14 @@
 # D11 — Audit-tooling selftest (do the checkers actually check?)
 
-**Status: awaiting review** · From Dante's observation before game 3:
+**Status: implemented** (`src/selftest.ts`, `cli.ts selftest`, in CI):
+audit 6 classes, validator 9, invariant 3 (including the D14 option
+menu: `&plant=hidden-option` in a mock LLM game), golden 3, each after
+a clean baseline; `audit --file <game> --review-sample N` writes the
+manual-review packet (`audit-sample.md` next to the record). The
+auditor reports its ledger to an optional observer for the packet;
+detection does not depend on it. The one review-packet step not done
+here: the human calibration pass itself. · From Dante's observation
+before game 3:
 the audit tools themselves have never been reviewed against a test.
 Every checker in the harness has only ever run on games we believed
 were good — and a checker that silently passes everything produces

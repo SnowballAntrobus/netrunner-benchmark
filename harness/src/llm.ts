@@ -54,6 +54,7 @@ export interface ChoiceContext {
   callIndex: number; // nth LLM decision this game (1-based)
   attempt: number; // 1-based attempt number for this decision
   optionCount: number;
+  seq?: number; // the page's decision seq (ReplayClient alignment check)
 }
 
 export interface SummaryResult {
@@ -459,6 +460,59 @@ export class OpenRouterClient implements ChoiceClient {
   }
 }
 
+// ---- replay (D15) -----------------------------------------------------------
+// Re-simulates a recorded game: every API decision is answered with the
+// recorded choice. The engine is deterministic under the seed, the page's
+// own auto-resolution/fusion is deterministic, so a faithful replay reaches
+// every recorded decision in order with the same menu — any seq or menu-size
+// mismatch is a divergence and aborts the replay rather than guessing.
+
+export interface RecordedChoice {
+  seq: number;
+  choice: number;
+  optionCount: number;
+  reasoning: string;
+  raw: string;
+}
+
+export class ReplayClient implements ChoiceClient {
+  readonly model: string;
+  constructor(
+    model: string,
+    private readonly decisions: RecordedChoice[]
+  ) {
+    this.model = model;
+  }
+
+  async chooseOption(
+    _system: string,
+    _messages: ChatMessage[],
+    context: ChoiceContext
+  ): Promise<ChoiceAttempt> {
+    const rec = this.decisions[context.callIndex - 1];
+    if (!rec) throw new Error(`replay: no recorded API decision #${context.callIndex}`);
+    if (context.seq !== undefined && context.seq !== rec.seq) {
+      throw new Error(
+        `replay diverged: API decision #${context.callIndex} arrived at seq ${context.seq}, recorded at seq ${rec.seq}`
+      );
+    }
+    if (context.optionCount !== rec.optionCount) {
+      throw new Error(
+        `replay diverged at seq ${rec.seq}: ${context.optionCount} options now, ${rec.optionCount} recorded`
+      );
+    }
+    return {
+      parsed: { option: rec.choice, reasoning: rec.reasoning },
+      raw: rec.raw,
+      usage: { ...ZERO_USAGE },
+    };
+  }
+
+  async summarize(): Promise<SummaryResult> {
+    return { text: "(replay)", usage: { ...ZERO_USAGE }, latencyMs: 0, truncated: false };
+  }
+}
+
 export function makeClient(model: string, seed: number, maxTokens = 1024): ChoiceClient {
   if (model === "mock") return new MockClient(seed);
   if (model.startsWith("openrouter/")) return new OpenRouterClient(model);
@@ -615,7 +669,8 @@ export async function decideWithRetries(
   history: ChatMessage[],
   decisionMessage: string,
   callIndex: number,
-  optionCount: number
+  optionCount: number,
+  seq?: number
 ): Promise<BridgeResult> {
   const startedAt = Date.now();
   const usage: Usage = { ...ZERO_USAGE };
@@ -631,6 +686,7 @@ export async function decideWithRetries(
       callIndex,
       attempt,
       optionCount,
+      ...(seq !== undefined ? { seq } : {}),
     });
     usage.tokensIn += result.usage.tokensIn;
     usage.tokensOut += result.usage.tokensOut;

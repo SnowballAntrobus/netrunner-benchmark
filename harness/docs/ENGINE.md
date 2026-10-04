@@ -20,9 +20,18 @@ jQuery, Pixi (+ pixi-particles, particlesystems, cardrenderer), lz-string,
 seedrandom, then the eleven core engine files (`init`, `phase`, `command`,
 `checks`, `mechanics`, `utility`, `decks`, `runcalculator`, `ai_corp`,
 `ai_runner` + the `cardSet` prelude), the System Gateway / System Update 2021
-/ tutorial sets, and finally `harness/page/bootstrap.js`. Text mode
+/ tutorial sets, and finally the harness page layer: `bootstrap.js`,
+`serializer.js` (+ the no-cheating invariant), `snapshot.js` (viewer
+frames, D15) and `llmplayer.js` (model seats). Text mode
 (`accessibilityMode="text"`) skips the graphical board; `mainLoopDelay = 0`
 additionally short-circuits `Render()`.
+
+**Extra card sets (D16).** Decks built on other sets (Elevation, the
+partial Core set, ...) name them in `&sets=a,b`; an inline loader
+`document.write`s those set files right after the base sets, so the
+engine sees the same load order as its own pages. Names are validated
+(`/^[a-z0-9]+$/`); base-pool games pass no parameter and load
+byte-identically to before. `harness/inspect.html` has the same loader.
 
 Decks are passed the same way the engine's own pages do it: LZ-compressed
 JSON (`{identity, cards[], name}`) in the `r`/`c` URL params, built from
@@ -156,10 +165,10 @@ capturedLog is never mutated, so golden fixtures are unaffected. Marker
 log-position is measured before the engine transition runs, so turn-begin
 triggers render after the marker.
 
-## LLM seat (M4)
+## LLM seat (M4; either seat since D14)
 
-`page/llmplayer.js` swaps a delegation shell into `runner.AI` just before
-StartGame: `Object.create(rulesAiInstance)` with only CommandChoice /
+`page/llmplayer.js` swaps a delegation shell into `runner.AI` (and/or
+`corp.AI`, `&llm=runner|corp|both`) just before StartGame: `Object.create(rulesAiInstance)` with only CommandChoice /
 SelectChoice overridden. This matters because cards call ~70 rules-AI
 methods/fields behind `if (player.AI != null)` guards — a bare object
 crashes the first time a card consults it; the shell gives cards sane
@@ -171,6 +180,13 @@ logged into the same JSONL stream (options described from ITS view — the
 stream is host-side analysis data, never shown to the LLM). Both
 decklists are granted to the LLM in the system prompt (open decklists) —
 a deliberate prompt-layer grant, distinct from serializer honesty.
+
+Since D14 the shell is hidden from card code: `player.AI` becomes an
+accessor that returns null when the caller is a card script (detected
+from the call stack: a `sets/*.js` frame with no rules-AI frame above
+it), so `if (player.AI != null)` branches no longer prune a model's
+menus to the rules AI's pick. Rules-AI code and the harness still see
+the shell. `--ai-branches rules` turns this off (era-3 behavior).
 
 Host-side (D01), the default is one running conversation per game with
 model-authored compaction — `Transcript` in `src/llm.ts`, threaded through
@@ -189,8 +205,9 @@ spends are temporary/card credits, not pool; "taken from <card>" is a pool
 gain attributed via the card's side. Unknown credit-shaped lines are
 failures, forcing parser coverage of the card pool. Baseline: all 10
 golden fixtures + sample LLM games pass (~600 credit checkpoints, ~300
-click turns, zero mismatches); a planted-corruption negative test
-confirms sensitivity. Runs in CI. Tier two (qualitative timing/ruling
+click turns, zero mismatches). Sensitivity is proven by the D11 selftest
+(six planted defect classes, each caught at the planted line). Runs in
+CI. Tier two (qualitative timing/ruling
 review) is the Claude Desktop audit skill; tier three (API-credit LLM
 judge over ReproductionCode positions) is deferred.
 

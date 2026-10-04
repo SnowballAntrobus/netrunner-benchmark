@@ -19,7 +19,7 @@ interface ManifestGame {
   runner: string;
 }
 
-interface Fixture {
+export interface Fixture {
   id: string;
   seed: number;
   corpPrecon: string;
@@ -31,7 +31,7 @@ interface Fixture {
   log: string[]; // normalized
 }
 
-function toFixture(id: string, r: GameRecord): Fixture {
+export function toFixture(id: string, r: GameRecord): Fixture {
   return {
     id,
     seed: r.seed,
@@ -42,6 +42,23 @@ function toFixture(id: string, r: GameRecord): Fixture {
     corpAgendaPoints: r.corpAgendaPoints,
     runnerAgendaPoints: r.runnerAgendaPoints,
     log: normalizeLog(r.log),
+  };
+}
+
+/** The golden comparison itself, as a pure function (D11 selftest runs
+ *  it against doctored fixture copies): same result, and the first
+ *  normalized log line where the two differ (-1 = identical). */
+export function compareToFixture(
+  frozen: Pick<Fixture, "winner" | "reason" | "corpAgendaPoints" | "runnerAgendaPoints" | "log">,
+  fresh: Pick<Fixture, "winner" | "reason" | "corpAgendaPoints" | "runnerAgendaPoints" | "log">
+): { resultMatch: boolean; diverge: number } {
+  return {
+    resultMatch:
+      frozen.winner === fresh.winner &&
+      frozen.reason === fresh.reason &&
+      frozen.corpAgendaPoints === fresh.corpAgendaPoints &&
+      frozen.runnerAgendaPoints === fresh.runnerAgendaPoints,
+    diverge: firstDivergence(frozen.log, fresh.log),
   };
 }
 
@@ -89,12 +106,7 @@ export async function golden(repoRoot: string, mode: "record" | "check"): Promis
         continue;
       }
 
-      const resultMatch =
-        frozen.winner === fresh.winner &&
-        frozen.reason === fresh.reason &&
-        frozen.corpAgendaPoints === fresh.corpAgendaPoints &&
-        frozen.runnerAgendaPoints === fresh.runnerAgendaPoints;
-      const diverge = firstDivergence(frozen.log, fresh.log);
+      const { resultMatch, diverge } = compareToFixture(frozen, fresh);
 
       if (resultMatch && diverge === -1) {
         console.log(`${g.id} PASS (${fresh.log.length} lines, ${(record.durationMs / 1000).toFixed(1)}s)`);

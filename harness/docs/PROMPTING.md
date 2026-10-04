@@ -3,9 +3,10 @@
 Every authored word shown to the model is an experimental variable. This
 document records what those variables are, how they are controlled, and
 what the literature says about them. The full rendered system prompt is
-saved per game (`out/<game_id>-system-prompt.txt`), and the game record
-carries `rulesSource`, `promptProfile`, and `reasoningStyle` — a result is
-never separable from the prompt that produced it.
+saved per game (`out/<game_id>/system-prompt.txt`; one
+`system-prompt.<seat>.txt` per seat in two-model games), and the game
+record carries `rulesSource`, `promptProfile`, and `reasoningStyle` — a
+result is never separable from the prompt that produced it.
 
 ## Prompt profiles (`--profile`)
 
@@ -174,6 +175,16 @@ the baseline. The knob design, when we build it: opponent framing ∈
 {none (current default), rules-AI, human, another LLM}, crossed with
 truthfulness (framing ≠ actual opponent is itself an interesting
 deception-adjacent arm to handle thoughtfully).
+
+**Seats (D14).** The Corp seat gets texts parallel to the Runner's,
+written to the same standard (rules digest, interface guide, actions
+paragraphs); a Runner-vs-rules prompt is byte-identical to era 3. The
+`neutral` profile still says nothing about the opponent. The `expert`
+profile names it truthfully: "a rules-based Corp/Runner AI" against the
+rules AI, "another AI model" in a two-model game. In a two-model game
+the Corp reads a Runner-perspective log (the engine has one global
+viewing perspective, which must stay honest for the Runner), and its
+prompt says so in one sentence.
 
 **Cross-match memory** ("RL for context compaction"): letting the model
 carry compacted lessons between games is verbal/in-context learning —

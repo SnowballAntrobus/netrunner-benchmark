@@ -15,6 +15,7 @@ export interface CardInfo {
   title: string;
   type: string;
   faction: string;
+  side?: string; // "corp" | "runner" (NetrunnerDB side_code)
   text: string;
   keywords?: string;
   cost?: number;
@@ -37,6 +38,7 @@ export async function loadCardData(repoRoot: string): Promise<Map<number, CardIn
       title: String(c["title"]),
       type: String(c["type_code"]),
       faction: String(c["faction_code"]),
+      side: c["side_code"] ? String(c["side_code"]) : undefined,
       text: String(c["text"] ?? ""),
       keywords: c["keywords"] ? String(c["keywords"]) : undefined,
       cost: typeof c["cost"] === "number" ? c["cost"] : undefined,

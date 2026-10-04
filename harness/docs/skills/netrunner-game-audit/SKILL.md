@@ -12,11 +12,17 @@ written report; you spend no game-API credit.
 
 ## Inputs
 
-- A game record: `harness/out/<game_id>.json` (or a golden fixture
-  `harness/fixtures/golden/g*.json`). Contains the full log.
-- For LLM games, the decision log `harness/out/<game_id>.jsonl` — one
-  record per decision, both seats; Runner records carry the exact state
-  the model saw and a `reproduction_code` for replaying the position.
+- A game record: `harness/out/<game_id>/record.json` (or
+  `harness/data/games/<game_id>/record.json`, or a golden fixture
+  `harness/fixtures/golden/g*.json`). Contains the full log. Legacy flat
+  games use `<game_id>.json`.
+- For LLM games, the decision log `decisions.jsonl` next to the record —
+  one record per decision, both seats; the records of the seat(s) a
+  model played (`record.llmSeat`: runner, corp or both) carry the exact
+  state the model saw and a `reproduction_code` for replaying the
+  position.
+- Tier one's arithmetic, sampled for hand-checking: `npx tsx src/cli.ts
+  audit --file <run> --review-sample 12` writes `audit-sample.md`.
 - Rules ground truth, in order of authority for rulings:
   1. `harness/rules/comprehensive-rules.txt` — the pinned NSG
      Comprehensive Rules snapshot (fetched by `npm run fetch-rules`).
@@ -52,8 +58,8 @@ written report; you spend no game-API credit.
      stated modifiers; abilities' costs paid before effects.
    - Damage/tags: correct count discarded at random; flatline only when
      damage exceeds cards in grip; tag consequences only while tagged.
-4. **For LLM games, audit the interface too.** For 3–5 Runner decision
-   records: does the serialized state match the log context? Do the
+4. **For LLM games, audit the interface too.** For 3–5 decision
+   records of each model seat: does the serialized state match the log context? Do the
    options offered correspond to legal actions in that state? Did the
    executed choice (`choice` index) match what the following log lines
    show happening? Flag any state/log inconsistency — that is a harness

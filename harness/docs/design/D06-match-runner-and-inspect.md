@@ -9,10 +9,19 @@ headers without AP. Run labels — **REMOVED in review**: a
 config-derived name ignores deck/seat/ablation arms, and a
 run-identity-derived name adds little over the gameId while the config
 space is still growing; revisit with §1, where a MATCH-level label may
-be the natural unit. §1 (run-match) and §2 (inspect) remain **awaiting
-review**, deliberately sequenced AFTER a single-game shakedown run
-validates the full stack — batching machinery should aggregate a
-pipeline already known to be sound. M5 acceptance: 10 complete games,
+be the natural unit. §1 (run-match) **implemented** (`src/match.ts`):
+N games on seeds S..S+N-1 or `--seeds a,b,c`, `--repeat K` runs per
+seed (D12's within-seed arm), crash = row, `--label` names the match
+folder (`out/match-<label>/`), `--watch` refused, `--live` follows the
+whole match in one viewer tab, completed games OFFERED for promotion
+(`--promote-all` promotes them, D06-1). `match.json` +
+`match-summary.md`: the table below (two-seat games show per-seat
+values as Corp / Runner), win rate per (seat, model) with a standard
+error clustered by seed, how games ended, means and totals, and for
+repeated seeds the first-divergence decision between every pair of
+runs. Mock reruns salt the mock's choice stream so the within-seed path
+is exercised keylessly (CI). §2 (inspect) was superseded by the D08
+replay and then the D15 board viewer. M5 acceptance: 10 complete games,
 zero crashes, results table, at least one moment inspected visually.
 
 ## 1. `run-match` + results table

@@ -4,8 +4,8 @@
 amendment — `out/<game_id>/` with canonical names, `src/paths.ts`
 resolving both layouts, all tools accepting folders; `corpus
 --promote/--report` + `src/prices.ts` live; first CORPUS.md generated
-from the three era-3 games. §4 run-match remains to build, as the D12
-vehicle.) · Original scope
+from the three era-3 games. §4 run-match: **implemented** — see D06
+§1's status for the shape it shipped in.) · Original scope
 (match runner first) inverted by Dante's directive: every run costs
 money, so analysis must be CUMULATIVE over everything already in
 `out/`, with the data itself versioned on GitHub and a report that
