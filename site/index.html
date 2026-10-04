@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="A research harness that seats language models at Android: Netrunner — as the Runner, the Corp, or both — with every decision logged, replayable, and checked for honesty.">
+  <title>Netrunner Benchmark</title>
+  <link rel="stylesheet" href="./assets/styles.css">
+  <style>
+    /* pipeline figure (HTML, so it reflows on phones) */
+    .pipeline { display: flex; flex-wrap: wrap; align-items: stretch; gap: .5rem; margin: 0; padding: 0; list-style: none; }
+    .pipeline li { flex: 1 1 11rem; display: flex; flex-direction: column; gap: .3rem; padding: .9rem 1rem; border-radius: .5rem; border: 1px solid var(--color-rule); background: #fff; position: relative; }
+    .pipeline li b { color: #172334; font-size: .95rem; }
+    .pipeline li span { color: var(--color-muted); font-size: .85rem; line-height: 1.5; }
+    .pipeline li.engine { background: #f7f2e6; border-color: #e5d6b0; }
+    .pipeline li.page { background: #eef3fb; border-color: #c9d8f2; }
+    .pipeline li.host { background: #f3f5f8; }
+    .pipeline li.out { background: #eef7f2; border-color: #c7e3d3; }
+    .pipeline .arrow { flex: 0 0 auto; align-self: center; color: #8a97a8; font-size: 1.2rem; border: 0; background: none; padding: 0; }
+    @media (max-width: 760px) { .pipeline .arrow { flex-basis: 100%; text-align: center; transform: rotate(90deg); } }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#content">Skip to content</a>
+  <header class="page-header">
+    <p class="eyebrow">Language models at Android: Netrunner</p>
+    <h1>Netrunner Benchmark</h1>
+    <p class="lede">A research harness that seats language models at a game of hidden information and long-horizon risk — as the Runner, as the Corp, or on both sides — against a rules-based opponent or against each other. Every decision is logged with exactly what the model saw, replayable on a board viewer, and checked for honesty.</p>
+    <nav aria-label="Sections">
+      <a href="#introduction">Introduction</a><a href="#watch">Watch a game</a><a href="#method">How it works</a>
+      <a href="#results">Results</a><a href="#reproduce">Reproduce</a><a href="#references">References</a>
+    </nav>
+  </header>
+  <main id="content">
+    <section id="introduction" aria-labelledby="introduction-title">
+      <h2 id="introduction-title">Introduction</h2>
+      <p><em>Android: Netrunner</em> is an asymmetric card game. The Corp installs cards facedown and protects them with ice; the Runner makes runs to break in and steal agendas. A facedown card might be a seven-point agenda or an ambush that flatlines a careless Runner, so every run is a bet placed on partial information. Games last hundreds of decisions over fifteen or more turns, which stresses long-context play, memory, risk arithmetic, and learning within a single game.</p>
+      <p>The game is also, in practice, novel to language models. Unlike chess or Go there is no large public corpus of played games to learn from, so strong play has to be produced in context — from the rules, the decklists, and the board at hand — rather than retrieved.</p>
+      <p>The harness runs on the <a href="https://github.com/bobtheuberfish/chiriboga">Chiriboga</a> engine (via <a href="https://github.com/drbo6/chiriboga">DrBo6's solo-mode fork</a>), treated as quarantined ground truth: no engine file is modified. A model occupies a seat through the same decision interface the engine's built-in AIs use, receives the official learn-to-play rules and both decklists, and answers each decision by choosing one option from the engine's own list of legal moves.</p>
+    </section>
+
+    <section id="watch" aria-labelledby="watch-title">
+      <h2 id="watch-title">Watch a game</h2>
+      <p>The board viewer replays a recorded game decision by decision: the full board, the model's reasoning written before it chose, and the exact menu it chose from. Switch perspective to see only what one side could see. The same viewer follows a game live while it is being played.</p>
+      <figure id="featured">
+        <div class="viewer-frame"><iframe id="featured-frame" title="Board viewer — featured game" loading="lazy" src="./viewer/?game=../data/games/llm-claude-opus-5-s7-1786422381592.json"></iframe></div>
+        <div class="figure-actions"><a id="featured-open" href="./viewer/?game=../data/games/llm-claude-opus-5-s7-1786422381592.json">Open full screen</a><span>← → step · Shift+← → model decisions · Space play · 1 2 3 perspective</span></div>
+        <figcaption><strong>Figure 1. Claude Opus 5 as the Runner against the rules-based Corp.</strong> Gateway Runner vs Gateway Corp, seed 7: the corpus's first Runner win, 7–3 on agenda points over 15 turns. Gold outlines mark what changed since the previous step; omniscient view labels the cards the opponent could not see.</figcaption>
+      </figure>
+      <h3>All recorded games</h3>
+      <ul class="gallery" id="gallery" aria-live="polite"><li class="table-note">Loading games…</li></ul>
+      <noscript><p class="table-note">The game list needs JavaScript; the raw records are in <a href="https://github.com/SnowballAntrobus/netrunner-benchmark/tree/dev/harness/data/games">harness/data/games</a>.</p></noscript>
+    </section>
+
+    <section id="method" aria-labelledby="method-title">
+      <h2 id="method-title">How it works</h2>
+      <figure>
+        <ol class="pipeline" aria-label="Harness pipeline">
+          <li class="engine"><b>Engine</b><span>Chiriboga in a headless browser page, unmodified. Seeded end to end.</span></li>
+          <li class="arrow" aria-hidden="true">→</li>
+          <li class="page"><b>Seat layer</b><span>Model seats, honest state serializer, no-cheating checks, board snapshots.</span></li>
+          <li class="arrow" aria-hidden="true">→</li>
+          <li class="host"><b>Host</b><span>Model clients (Anthropic, OpenRouter, mock), running transcript, self-written memory, retries.</span></li>
+          <li class="arrow" aria-hidden="true">→</li>
+          <li class="out"><b>Records</b><span>Every decision with state, menu, reasoning, cost and a resumable engine position.</span></li>
+          <li class="arrow" aria-hidden="true">→</li>
+          <li class="out"><b>Review</b><span>Corpus report, conservation audit, re-simulation, board viewer.</span></li>
+        </ol>
+        <figcaption><strong>Figure 2. The pipeline.</strong> All benchmark code lives in <code>harness/</code> and attaches to the engine at the page level; the engine never knows a model is playing.</figcaption>
+      </figure>
+      <p><strong>The seat.</strong> Each decision the engine asks of a seat becomes one request: the game state as that player sees it, the recent public log, and the numbered list of legal options. The model answers through a forced tool call — reasoning first, then an option index. Decisions with a single legal option resolve without a call, and multi-step actions are offered as complete actions ("play Jailbreak, then run R&amp;D") so the model states each intention once. A model can play either side: <code>--seat runner</code>, <code>--seat corp</code>, or <code>--seat both</code> for model-versus-model games, each seat with its own transcript.</p>
+      <p><strong>Honest menus.</strong> The engine's card scripts contain shortcuts written for its own AI that quietly prune a menu to the rules AI's preferred choice. The harness makes card code treat a model's seat as a human player's, so the model always receives the full legal menu a person would — while hidden information stays hidden, card searches show the searching player their own deck, and multi-card selections are answered one card at a time.</p>
+      <p><strong>Memory.</strong> A game is one running conversation. When the transcript nears the model's context limit, the model writes a summary for its future self and play continues from that memo plus its most recent exchanges — the memo is shown in the viewer at the moment it was written. After the game, the model answers a short debrief.</p>
+      <ul class="facts" aria-label="Mechanically enforced invariants">
+        <li><b>Deterministic</b>Seeded engine; golden games must replay byte-identically, and recorded model games re-simulate decision by decision.</li>
+        <li><b>No cheating</b>An independent checker proves no state or menu a model sees contains information its player could not see.</li>
+        <li><b>Conservation</b>An auditor re-derives every credit and click from the log and reconciles it with the engine's ground truth.</li>
+        <li><b>Honest interface</b>Exactly the engine's legal options, neutrally described, for every seat.</li>
+      </ul>
+      <p><strong>Card pool.</strong> Games default to the System Gateway starter decks. The harness loads any engine set a deck needs (System Update 2021, Elevation, the partial Core set), and a qualification run plays every preconstructed deck before it is allowed into benchmark games: <span id="pool-summary">decks that crash, stall, leak information or fail the audit are refused</span>.</p>
+    </section>
+
+    <section id="results" aria-labelledby="results-title">
+      <h2 id="results-title">Results</h2>
+      <p class="callout"><strong>Preliminary.</strong> The games below are shakedown runs: one seed, one matchup, one game per model, recorded before the interface fixes that began the current era. They show the pipeline working end to end, not a ranking of models.</p>
+      <div class="table-scroll" role="region" aria-label="Recorded games" tabindex="0">
+        <table class="data-table" id="games-table">
+          <caption>Recorded games</caption>
+          <thead><tr><th scope="col">Model (seat)</th><th scope="col">Matchup</th><th scope="col">Result</th><th scope="col" class="num">Agenda points</th><th scope="col" class="num">Corp turns</th><th scope="col" class="num">Model decisions</th><th scope="col" class="num">Cost</th></tr></thead>
+          <tbody><tr><td colspan="7" class="table-note">Loading…</td></tr></tbody>
+        </table>
+      </div>
+      <p class="table-note" id="games-note">“Model decisions” counts API calls; the engine asked many more questions, most with a single legal answer. Cost is the provider-billed amount where reported, otherwise estimated from list prices.</p>
+      <!-- Results discussion to be written by the author. -->
+      <p class="draft-placeholder" aria-label="Results discussion to be added">…</p>
+    </section>
+
+    <section id="reproduce" aria-labelledby="reproduce-title">
+      <h2 id="reproduce-title">Reproduce</h2>
+      <p>Everything runs from <code>harness/</code> with Node 22 and Playwright's Chromium. The mock model plays random legal moves and needs no API key.</p>
+<pre><code>cd harness &amp;&amp; npm install
+npm test                                            # typecheck + determinism
+npx tsx src/cli.ts llm-game --model mock --seed 3   # keyless end-to-end game
+export ANTHROPIC_API_KEY=…                          # or OPENROUTER_API_KEY
+npx tsx src/cli.ts llm-game --model claude-haiku-4-5 --seed 7 --live
+npx tsx src/cli.ts llm-game --seat corp --model claude-haiku-4-5
+npx tsx src/cli.ts llm-game --seat both --corp-model claude-haiku-4-5 \
+    --runner-model openrouter/openai/gpt-5.4-mini
+npx tsx src/cli.ts run-match --games 10 --seed 1 --model claude-haiku-4-5
+npx tsx src/cli.ts replay --file out/&lt;game&gt;      # board viewer</code></pre>
+      <p>The <a href="https://github.com/SnowballAntrobus/netrunner-benchmark#readme">README</a> documents every command, flag and record format.</p>
+    </section>
+
+    <section id="references" aria-labelledby="references-title">
+      <h2 id="references-title">References</h2>
+      <ul class="references">
+        <li id="ref-chiriboga"><span class="ref-number">[1]</span> bobtheuberfish. <a href="https://github.com/bobtheuberfish/chiriboga">Chiriboga</a> — the Netrunner engine and rules AI this harness runs on; solo-mode extension by <a href="https://github.com/drbo6/chiriboga">DrBo6</a>. GPL-3.0.</li>
+        <li id="ref-nsg"><span class="ref-number">[2]</span> Null Signal Games. <a href="https://nullsignal.games/players/learn-to-play/">Learn to Play</a> guides and the <a href="https://rules.nullsignal.games/">Comprehensive Rules</a> — the rules text given to the models.</li>
+        <li id="ref-nrdb"><span class="ref-number">[3]</span> <a href="https://netrunnerdb.com/">NetrunnerDB</a> — card data used for the decklists in the prompt and the viewer.</li>
+        <li id="ref-miller"><span class="ref-number">[4]</span> Miller (2024). <a href="https://arxiv.org/abs/2411.00640"><cite>Adding Error Bars to Evals: A Statistical Approach to Language Model Evaluations.</cite></a> Seeds as clusters; within-seed variance.</li>
+        <li id="ref-ruler"><span class="ref-number">[5]</span> Hsieh et al. (2024). <a href="https://arxiv.org/abs/2404.06654"><cite>RULER: What's the Real Context Size of Your Long-Context Language Models?</cite></a> Why the harness re-sends fresh state every decision.</li>
+        <li id="ref-nolima"><span class="ref-number">[6]</span> Modarressi et al. (2025). <a href="https://arxiv.org/abs/2502.05167"><cite>NoLiMa: Long-Context Evaluation Beyond Literal Matching.</cite></a></li>
+        <li id="ref-vending"><span class="ref-number">[7]</span> Backlund and Petersson (2025). <a href="https://arxiv.org/abs/2502.15840"><cite>Vending-Bench: A Benchmark for Long-Term Coherence of Autonomous Agents.</cite></a></li>
+        <li id="ref-arena"><span class="ref-number">[8]</span> <a href="https://arxiv.org/abs/2508.03368">Game Reasoning Arena (arXiv:2508.03368)</a> — eliciting reasoning before the action.</li>
+      </ul>
+      <p class="table-note"><em>Netrunner</em> and <em>Android</em> are trademarks of Fantasy Flight Publishing, Inc. and/or Wizards of the Coast LLC. This is a fan-made research project, not affiliated with or endorsed by FFG, WotC, or Null Signal Games. Card text is the property of Null Signal Games.</p>
+    </section>
+  </main>
+  <script type="module" src="./assets/site.mjs"></script>
+</body>
+</html>

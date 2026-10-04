@@ -321,6 +321,8 @@
   }
 
   window.__harness.stateFor = stateFor;
+  // The public-narration filter, shared with snapshot.js (live viewer log).
+  window.__harness.isPublicLogLine = isPublicLogLine;
   // Card/option description helper for llmplayer.js — same PlayerCanLook
   // honesty as the rest of the serializer.
   window.__harness.cardEntry = function (card, side, reveal) {

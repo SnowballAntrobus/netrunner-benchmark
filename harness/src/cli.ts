@@ -228,6 +228,10 @@ if (command === "run-game") {
   for (const [seat, m] of Object.entries(seatModels) as [Seat, string][]) {
     compactionThresholds[seat] = parseInt(explicitThreshold || defaultCompactThreshold(m), 10);
   }
+  {
+    const { assertQualified } = await import("./cardpool.js");
+    await assertQualified(repoRoot, [corpPrecon, runnerPrecon], boolArg("allow-unqualified"));
+  }
   const live = boolArg("live");
   const liveViewer = live ? await startLiveViewer(repoRoot) : null;
   const record = await runLLMGame({
@@ -376,6 +380,10 @@ if (command === "run-game") {
   for (const w of written) console.log(w);
   process.exit(0);
 } else if (command === "replay") {
+  // D15: the board viewer (site/viewer/) on a recorded game — writes the
+  // game's viewer bundle to out/viewer/<id>.json and serves it. --engine
+  // opens the D08 engine-board replay instead (the real engine renderer,
+  // eval'ing each record's reproduction_code).
   const file = arg("file", "");
   if (!file) {
     console.error("replay requires --file <run folder or game record>");
@@ -384,15 +392,58 @@ if (command === "run-game") {
   const { relative, sep } = await import("node:path");
   const { resolveGameArtifacts } = await import("./paths.js");
   const replayArt = resolveGameArtifacts(resolve(file));
-  const abs = replayArt.record;
-  const jsonlAbs = replayArt.jsonl;
   const rel = (p: string): string => "/" + relative(repoRoot, p).split(sep).join("/");
   const { startServer } = await import("./server.js");
+  const shot = arg("screenshot", "");
+  if (!process.argv.includes("--engine")) {
+    const { existsSync } = await import("node:fs");
+    if (!existsSync(replayArt.frames)) {
+      console.log("no frames.jsonl for this game — re-simulating it to capture them…");
+      const { resimulate } = await import("./resim.js");
+      const r = await resimulate(repoRoot, replayArt.dir, outDir);
+      console.log(`${r.ok ? "ok" : "FAILED"}: ${r.message}`);
+      if (!r.ok) process.exit(1);
+    }
+    const { writeBundle } = await import("./site.js");
+    const bundlePath = join(outDir, "viewer", `${replayArt.gameId}.json`);
+    const info = await writeBundle(repoRoot, replayArt.dir, bundlePath);
+    console.log(`bundle: ${bundlePath} (${info.steps} steps, ${info.frames} boards, ${(info.bytes / 1e6).toFixed(1)} MB)`);
+    const server = await startServer(repoRoot);
+    const step = arg("step", "");
+    const url =
+      `http://127.0.0.1:${server.port}/site/viewer/?game=${encodeURIComponent(rel(bundlePath))}` +
+      (step ? `#step=${step}` : "");
+    if (shot) {
+      const browser = await launchBrowser();
+      const page = await browser.newPage();
+      await page.setViewportSize({ width: 1600, height: 1000 });
+      await page.goto(url, { waitUntil: "load" });
+      await page.waitForFunction(
+        () => (window as unknown as { __viewer?: { ready: () => boolean } }).__viewer?.ready() === true,
+        undefined,
+        { timeout: 60_000 }
+      );
+      await page.waitForTimeout(300);
+      await page.screenshot({ path: shot });
+      await browser.close();
+      await server.close();
+      console.log(`screenshot: ${shot}`);
+      process.exit(0);
+    }
+    console.log("Board viewer running:");
+    console.log(`  ${url}`);
+    console.log("← → step · Shift+← → model decisions · Space play. Ctrl-C to stop.");
+    await new Promise(() => { /* stay up until interrupted */ });
+  }
+  // --engine: the D08 engine-board replay.
+  const abs = replayArt.record;
+  const jsonlAbs = replayArt.jsonl;
   const staticServer = await startServer(repoRoot);
   const seqArg = arg("seq", "");
   // Boot the engine with the game's own precon decks (avoids the slow
   // random deck builder; the boot decks are deleted by the first RC eval).
   const { loadPrecon, encodeDeckParam } = await import("./precons.js");
+  const { requiredSets, setsParam } = await import("./cardpool.js");
   const gameRec = JSON.parse(await readFile(abs, "utf-8")) as {
     corpPrecon?: string;
     runnerPrecon?: string;
@@ -404,9 +455,9 @@ if (command === "run-game") {
   const url =
     `http://127.0.0.1:${staticServer.port}/harness/inspect.html` +
     `?src=${encodeURIComponent(rel(jsonlAbs))}&game=${encodeURIComponent(rel(abs))}` +
+    setsParam(await requiredSets(repoRoot, [replayCorpDeck, replayRunnerDeck])) +
     `&c=${encodeDeckParam(replayCorpDeck)}&r=${encodeDeckParam(replayRunnerDeck)}` +
     (seqArg ? `&seq=${seqArg}` : "");
-  const shot = arg("screenshot", "");
   if (shot) {
     const browser = await launchBrowser();
     const page = await browser.newPage();
@@ -424,10 +475,42 @@ if (command === "run-game") {
     console.log(`screenshot: ${shot}`);
     process.exit(0);
   }
-  console.log("Replay viewer running:");
+  console.log("Engine replay viewer running:");
   console.log(`  ${url}`);
   console.log("Open in a browser; ← → keys step decisions. Ctrl-C to stop.");
   await new Promise(() => { /* stay up until interrupted */ });
+} else if (command === "site") {
+  // D17: the project site's data — viewer bundles for every corpus game
+  // with frames, plus site/data/index.json (gallery + results tables).
+  const { buildSiteData } = await import("./site.js");
+  const out = await buildSiteData(repoRoot);
+  console.log(`site data: ${out.games} games, ${(out.bytes / 1e6).toFixed(1)} MB of bundles → site/data/`);
+  process.exit(0);
+} else if (command === "frames") {
+  // D15: backfill viewer frames by re-simulating recorded games (no API
+  // calls) — verifies the replay decision-by-decision before installing
+  // frames.jsonl next to the record. --file <run> or --corpus (all games).
+  const { resimulate } = await import("./resim.js");
+  const { readdir } = await import("node:fs/promises");
+  const targets: string[] = [];
+  if (process.argv.includes("--corpus")) {
+    const dir = join(repoRoot, "harness", "data", "games");
+    for (const id of (await readdir(dir)).sort()) targets.push(join(dir, id));
+  } else {
+    const file = arg("file", "");
+    if (!file) {
+      console.error("frames requires --file <run folder> or --corpus");
+      process.exit(2);
+    }
+    targets.push(resolve(file));
+  }
+  let failures = 0;
+  for (const t of targets) {
+    const result = await resimulate(repoRoot, t, outDir);
+    if (!result.ok) failures++;
+    console.log(`${result.ok ? "ok  " : "FAIL"} ${t.split(/[\\/]/).pop()}: ${result.message}`);
+  }
+  process.exit(failures === 0 ? 0 : 1);
 } else if (command === "corpus") {
   // D06-1 rev 2: explicit promotion into harness/data/games/ + the
   // progressive CORPUS.md report. `--promote <run>` accepts a run
@@ -489,11 +572,9 @@ if (command === "run-game") {
   if (limit > 0) pairs = pairs.slice(0, limit);
   let failures = 0;
   let games = 0;
-  // Engine self-lint about card definitions (the partial Core set's
-  // Datasucker) — logged identically in rules-vs-rules games; reported,
-  // not failed.
-  const ENGINE_LINT = /^LogError: .* will be ignored because it is set to automatic/;
-  const hardErrors = (errors: string[]): string[] => errors.filter((e) => !ENGINE_LINT.test(e));
+  // Engine self-lint about card definitions — logged identically in
+  // rules-vs-rules games; reported, not failed (cardpool.ts ENGINE_LINT).
+  const { hardErrors } = await import("./cardpool.js");
   const lintCount = (errors: string[]): number => errors.length - hardErrors(errors).length;
   const browser = modes.includes("rules") ? await launchBrowser() : null;
   for (let i = 0; i < pairs.length; i++) {
@@ -539,26 +620,122 @@ if (command === "run-game") {
   console.log(failures === 0 ? `SMOKE: all ${games} games clean` : `SMOKE: ${failures}/${games} FAILED`);
   process.exit(failures === 0 ? 0 : 1);
 } else if (command === "pool") {
-  // D16: which precons are playable, and which set files each needs.
+  // D16: the card pool. Lists every precon with the set files it needs
+  // and its qualification status; `--qualify` (re)runs qualification —
+  // per deck, 3 rules-vs-rules games against the Gateway reference
+  // opponent (invariant on, conservation-audited) plus one mock game with
+  // the deck's own side as the LLM seat (exercises its cards' human
+  // branches under D14). A deck qualifies only if every game completes
+  // with no hard error, leak, audit finding or invalid record.
   const { readdir } = await import("node:fs/promises");
   const { loadPrecon } = await import("./precons.js");
-  const { checkPool } = await import("./cardpool.js");
+  const pool = await import("./cardpool.js");
   const { loadCardData } = await import("./carddata.js");
+  const { auditGameLog, buildCardSideMap } = await import("./audit.js");
   const cards = await loadCardData(repoRoot);
+  const only = arg("only", "");
   const names = (await readdir(join(repoRoot, "precons")))
     .filter((f) => f.endsWith(".js"))
     .map((f) => f.replace(/\.js$/, ""))
+    .filter((n) => !only || n === only)
     .sort();
+  if (process.argv.includes("--qualify")) {
+    const seeds = arg("seeds", "1,2,3").split(",").map((x) => parseInt(x, 10));
+    const reference = { corp: "Gateway Corp", runner: "Gateway Runner" };
+    const cardSide = await buildCardSideMap(repoRoot);
+    const existing = (await pool.loadPoolManifest(repoRoot)) ?? null;
+    const manifest: import("./cardpool.js").PoolManifest = {
+      comment:
+        "Card-pool qualification (D16), generated by `cli.ts pool --qualify`. Decks with " +
+        "qualified=false hit engine defects (crash, stall, error) or harness checks and are " +
+        "refused by llm-game/run-match unless --allow-unqualified.",
+      generated: new Date().toISOString().slice(0, 10),
+      referenceOpponents: reference,
+      seeds,
+      decks: only && existing ? { ...existing.decks } : {},
+    };
+    const browser = await launchBrowser();
+    for (const name of names) {
+      const deck = await loadPrecon(repoRoot, name);
+      const side = cards.get(deck.identity)?.side === "corp" ? "corp" as const : "runner" as const;
+      const check = await pool.checkPool(repoRoot, [deck]);
+      const games: import("./cardpool.js").QualificationGame[] = [];
+      const opponent = side === "corp" ? reference.runner : reference.corp;
+      const corpPrecon = side === "corp" ? name : opponent;
+      const runnerPrecon = side === "corp" ? opponent : name;
+      if (check.missing.length === 0) {
+        for (const sd of seeds) {
+          const rec = await runGame(
+            { repoRoot, seed: sd, corpPrecon, runnerPrecon, extraParams: "&invariant=1" },
+            browser
+          );
+          const hard = pool.hardErrors(rec.errors);
+          const audit = await auditGameLog(name, rec.log, cardSide);
+          const auditFindings = audit.issues.length + audit.unknownCreditLines.length;
+          const v = rec.invariantViolations ?? [];
+          games.push({
+            kind: "rules", seed: sd, opponent, status: rec.status, winner: rec.winner,
+            hardErrors: hard.length, lint: rec.errors.length - hard.length,
+            invariantViolations: v.length, auditFindings, invalidRecords: null,
+            firstProblem:
+              rec.status !== "completed" ? `game ${rec.status}` :
+              hard[0]?.slice(0, 160) ??
+              (v[0] ? `leak: ${JSON.stringify(v[0]).slice(0, 140)}` : null) ??
+              (auditFindings ? `audit: ${(audit.issues[0]?.detail ?? audit.unknownCreditLines[0]?.text ?? "").slice(0, 140)}` : null),
+          });
+        }
+        const sd = seeds[0]!;
+        const rec = await runLLMGame({
+          repoRoot, seed: sd, corpPrecon, runnerPrecon, seat: side, model: "mock",
+          rulesSource: "digest", profile: "neutral", reasoningStyle: "brief",
+          debrief: false, frames: false, extraParams: "&invariant=1",
+          outDir: join(outDir, "qualify"),
+        });
+        const hard = pool.hardErrors(rec.errors);
+        const v = rec.invariantViolations ?? [];
+        games.push({
+          kind: "llm-mock", seed: sd, opponent, status: rec.status, winner: rec.winner,
+          hardErrors: hard.length, lint: rec.errors.length - hard.length,
+          invariantViolations: v.length, auditFindings: null, invalidRecords: rec.invalidRecords,
+          firstProblem:
+            rec.status !== "completed" ? `mock ${side}-seat game ${rec.status}` :
+            hard[0]?.slice(0, 160) ??
+            (v[0] ? `leak: ${JSON.stringify(v[0]).slice(0, 140)}` : null) ??
+            (rec.invalidRecords ? `${rec.invalidRecords} invalid records` : null),
+        });
+      }
+      const qualified =
+        check.missing.length === 0 &&
+        games.every((g) => g.status === "completed" && g.hardErrors === 0 &&
+          g.invariantViolations === 0 && !g.auditFindings && !g.invalidRecords);
+      manifest.decks[name] = { side, sets: check.sets, qualified, games };
+      console.log(
+        `${qualified ? "✓" : "✗"} ${side.padEnd(6)} ${name.padEnd(40)} ` +
+          (qualified ? "" : games.find((g) => g.firstProblem)?.firstProblem ??
+            `${check.missing.length} unimplemented card(s)`)
+      );
+    }
+    await browser.close();
+    await writeFile(join(repoRoot, pool.POOL_MANIFEST), JSON.stringify(manifest, null, 1) + "\n");
+    const all = Object.values(manifest.decks);
+    console.log(
+      `\nqualified ${all.filter((d) => d.qualified).length}/${all.length} decks → ${pool.POOL_MANIFEST}`
+    );
+    process.exit(0);
+  }
+  const manifest = await pool.loadPoolManifest(repoRoot);
   for (const side of ["corp", "runner"]) {
-    console.log(`\n${side.toUpperCase()} precons (✓ playable, ✗ has unimplemented cards):`);
+    console.log(`\n${side.toUpperCase()} precons (✓ qualified, ✗ failed qualification, ? not qualified yet):`);
     for (const name of names) {
       const deck = await loadPrecon(repoRoot, name);
       if ((cards.get(deck.identity)?.side ?? "") !== side) continue;
-      const check = await checkPool(repoRoot, [deck]);
+      const check = await pool.checkPool(repoRoot, [deck]);
+      const q = manifest?.decks[name];
+      const mark = check.missing.length ? "✗" : q ? (q.qualified ? "✓" : "✗") : "?";
+      const why = q && !q.qualified ? ` — ${q.games.find((g) => g.firstProblem)?.firstProblem ?? ""}` : "";
       console.log(
-        `  ${check.missing.length ? "✗" : "✓"} ${name.padEnd(40)} ` +
-          `${check.sets.length ? check.sets.join("+") : "base pool"}` +
-          (check.missing.length ? ` — ${check.missing.length} unimplemented card(s)` : "")
+        `  ${mark} ${name.padEnd(40)} ${check.sets.length ? check.sets.join("+") : "base pool"}` +
+          (check.missing.length ? ` — ${check.missing.length} unimplemented card(s)` : why)
       );
     }
   }

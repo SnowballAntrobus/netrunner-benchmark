@@ -52,6 +52,17 @@
 		<script src="../utility.js"></script>
 		<script src="../sets/systemgateway.js"></script>
 		<script src="../sets/systemupdate2021.js"></script>
+		<!-- Card pool (D16): extra set files on demand, as in harness.html. -->
+		<script>
+			(function () {
+				var sets = new URLSearchParams(window.location.search).get("sets");
+				if (!sets) return;
+				sets.split(",").forEach(function (name) {
+					if (/^[a-z0-9]+$/.test(name))
+						document.write('<script src="../sets/' + name + '.js"><\/script>');
+				});
+			})();
+		</script>
 		<script src="../sets/tutorial.js"></script>
 		<script src="../decks.js"></script>
 		<script src="../runcalculator.js"></script>

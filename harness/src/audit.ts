@@ -192,8 +192,26 @@ export async function auditGameLog(
     if (/^(one|\d+) credits? (placed on|loaded onto) /.test(line)) continue; // bank↔card
     if (/^(Corp|Runner) used (one|\d+) credits? from /.test(line)) continue; // card counters
 
+    // ---- announcements whose credit effects are narrated separately -----
+    // (D16, extended pool; each verified against the card code.) Ability
+    // choices are announced as "<ability text> triggered" — the effects
+    // log through GainCredits/LoseCredits/TakeCredits like any other.
+    if (/ triggered$/.test(line)) continue;
+    // Subroutine announcements quote the subroutine text — Elevation ice
+    // writes "[credit]" where the base sets write "[c]"; the effects log
+    // separately ("Runner lost 2 credits").
+    if (/^Firing .+:$/.test(line) || /^Subroutine .+ broken$/.test(line)) continue;
+    // Side Hustle (Elevation): announcement, then TakeCredits narrates
+    // "N credits taken from Side Hustle".
+    if (/^Side Hustle pays out \d+ credits?$/.test(line)) continue;
+    // Account Siphon (Core): summary after LoseCredits/GainCredits/AddTags
+    // already narrated each effect.
+    if (/^Account Siphon: Corp lost \d+ credits?, Runner gained \d+ credits? and took \d+ tags?$/.test(line)) continue;
+
     // ---- unknown credit-ish lines (parser-coverage guard) ----------------
-    if (/credit/i.test(line) && !/^SPOILER:|^AI:|^RC:|^\[/.test(line)) {
+    // ERROR:/DEBUG: are engine channels, not narration (engine errors are
+    // surfaced on the game record).
+    if (/credit/i.test(line) && !/^SPOILER:|^AI:|^RC:|^ERROR:|^DEBUG:|^\[/.test(line)) {
       result.unknownCreditLines.push({ line: i, text: line.slice(0, 120) });
     }
   }

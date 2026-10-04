@@ -1,7 +1,7 @@
 /** Live viewer (D15): watch a game in the board viewer while it is played.
  *
  *  `llm-game --live` starts this server next to the game: it serves the
- *  repo statically (the viewer lives at /harness/viewer/) plus one
+ *  repo statically (the viewer lives at /site/viewer/) plus one
  *  Server-Sent Events stream, /live/events, carrying every LiveEvent the
  *  game emits (meta, decision, compaction, frame, end). A browser that
  *  connects late first receives the whole backlog, then follows the
@@ -74,7 +74,7 @@ export async function startLiveViewer(
   } catch {
     server = await startServer(repoRoot, route, 0); // preferred port busy
   }
-  const url = `http://127.0.0.1:${server.port}/harness/viewer/?live=1`;
+  const url = `http://127.0.0.1:${server.port}/site/viewer/?live=1`;
   console.log(`live viewer: ${url}`);
   if (options.open !== false) openBrowser(url);
 

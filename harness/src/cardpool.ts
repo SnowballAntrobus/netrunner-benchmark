@@ -85,3 +85,79 @@ export async function requiredSets(repoRoot: string, decks: Deck[]): Promise<str
 export function setsParam(sets: string[]): string {
   return sets.length > 0 ? `&sets=${sets.join(",")}` : "";
 }
+
+// ---- qualification (D16) ---------------------------------------------------
+
+/** The engine's own self-lint about card definitions ("... should not be
+ *  automatic", "... will be ignored because it is set to automatic").
+ *  Logged identically in rules-vs-rules games; reported, never a failure. */
+export const ENGINE_LINT =
+  /^LogError: \.[\w.]+ on .+ (will be ignored because it is set to automatic|should not be automatic)/;
+
+export function hardErrors(errors: string[]): string[] {
+  return errors.filter((e) => !ENGINE_LINT.test(e));
+}
+
+export interface QualificationGame {
+  kind: "rules" | "llm-mock";
+  seed: number;
+  opponent: string;
+  status: string;
+  winner: string | null;
+  hardErrors: number;
+  lint: number;
+  invariantViolations: number;
+  auditFindings: number | null; // null = not audited (mock games)
+  invalidRecords: number | null;
+  firstProblem: string | null;
+}
+
+export interface QualifiedDeck {
+  side: "corp" | "runner";
+  sets: string[];
+  qualified: boolean;
+  games: QualificationGame[];
+}
+
+export interface PoolManifest {
+  comment: string;
+  generated: string;
+  referenceOpponents: { corp: string; runner: string };
+  seeds: number[];
+  decks: Record<string, QualifiedDeck>;
+}
+
+export const POOL_MANIFEST = join("harness", "fixtures", "pool.json");
+
+export async function loadPoolManifest(repoRoot: string): Promise<PoolManifest | null> {
+  try {
+    return JSON.parse(await readFile(join(repoRoot, POOL_MANIFEST), "utf-8")) as PoolManifest;
+  } catch {
+    return null;
+  }
+}
+
+/** Refuse decks the qualification run failed (D16) — the extended pool
+ *  carries real engine defects (crashes, stalls) that would corrupt
+ *  benchmark data. `allow` overrides; unknown decks only warn. */
+export async function assertQualified(
+  repoRoot: string,
+  precons: string[],
+  allow: boolean
+): Promise<void> {
+  const manifest = await loadPoolManifest(repoRoot);
+  if (!manifest) return;
+  for (const name of precons) {
+    const entry = manifest.decks[name];
+    if (!entry) {
+      console.warn(`⚠ "${name}" has not been through pool qualification (cli.ts pool --qualify)`);
+      continue;
+    }
+    if (!entry.qualified && !allow) {
+      const why = entry.games.find((g) => g.firstProblem)?.firstProblem ?? "see harness/fixtures/pool.json";
+      throw new Error(
+        `"${name}" failed pool qualification (${why}) — pass --allow-unqualified to play it anyway`
+      );
+    }
+  }
+}

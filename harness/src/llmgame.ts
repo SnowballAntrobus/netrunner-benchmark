@@ -120,6 +120,8 @@ export interface LLMGameOptions {
   /** Appended verbatim to the harness URL — e.g. "&invariant=1" runs the
    *  no-cheating checker at every decision (D14: LLM menus included). */
   extraParams?: string;
+  /** Override the per-seat client (D15 replay re-simulation). */
+  clientFactory?: (seat: Seat, model: string) => ChoiceClient;
 }
 
 export interface DecisionRecord {
@@ -498,11 +500,13 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
       seat,
       model,
       // Mock seats get distinct streams so two mock seats don't mirror.
-      client: makeClient(
-        model,
-        seed + (mode === "both" && seat === "corp" ? 1000 : 0),
-        options.reasoningStyle === "extended" ? 2048 : 1024
-      ),
+      client:
+        options.clientFactory?.(seat, model) ??
+        makeClient(
+          model,
+          seed + (mode === "both" && seat === "corp" ? 1000 : 0),
+          options.reasoningStyle === "extended" ? 2048 : 1024
+        ),
       system,
       transcript:
         contextMode === "conversational"
@@ -819,7 +823,8 @@ export async function runLLMGame(options: LLMGameOptions): Promise<LLMGameRecord
           transcript ? transcript.messages() : [],
           decisionMessage,
           stats.llmDecisions,
-          request.options.length
+          request.options.length,
+          request.seq
         );
       } catch (e) {
         apiAborted = true;

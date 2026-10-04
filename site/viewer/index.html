@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Game Viewer · Netrunner Benchmark</title>
+  <meta name="description" content="Step through a recorded (or live) Netrunner benchmark game: the board, the model's reasoning, and the menu it chose from.">
+  <link rel="stylesheet" href="./viewer.css">
+</head>
+<body>
+  <div id="app" class="app" data-perspective="omni">
+    <header class="topbar">
+      <div class="title-block">
+        <a class="home" href="../" title="Project page">Netrunner Benchmark</a>
+        <h1 id="game-title">Loading game…</h1>
+        <p id="game-sub" class="sub"></p>
+      </div>
+      <div class="view-controls" role="group" aria-label="View">
+        <div class="seg" role="radiogroup" aria-label="Perspective">
+          <button type="button" data-persp="omni" aria-pressed="true" title="Everything, including facedown cards (1)">Omniscient</button>
+          <button type="button" data-persp="runner" aria-pressed="false" title="What the Runner can see (2)">Runner view</button>
+          <button type="button" data-persp="corp" aria-pressed="false" title="What the Corp can see (3)">Corp view</button>
+        </div>
+        <label class="toggle"><input type="checkbox" id="opt-skip" checked> Skip auto steps</label>
+        <label class="toggle"><input type="checkbox" id="opt-ai"> Rules-AI notes</label>
+      </div>
+    </header>
+
+    <main class="stage">
+      <section class="board" id="board" aria-label="Board">
+        <div class="side corp" id="corp-side"></div>
+        <div class="runbar" id="runbar" hidden></div>
+        <div class="side runner" id="runner-side"></div>
+      </section>
+      <aside class="panel" id="panel" aria-label="Decision"></aside>
+    </main>
+
+    <footer class="timeline">
+      <div class="transport">
+        <button type="button" id="btn-first" title="First step (Home)" aria-label="First step">⏮</button>
+        <button type="button" id="btn-prev-model" title="Previous model decision (Shift+←)" aria-label="Previous model decision">⏪</button>
+        <button type="button" id="btn-prev" title="Previous step (←)" aria-label="Previous step">◀</button>
+        <button type="button" id="btn-play" class="play" title="Play / pause (Space)" aria-label="Play">▶</button>
+        <button type="button" id="btn-next" title="Next step (→)" aria-label="Next step">▶︎</button>
+        <button type="button" id="btn-next-model" title="Next model decision (Shift+→)" aria-label="Next model decision">⏩</button>
+        <button type="button" id="btn-last" title="Last step (End)" aria-label="Last step">⏭</button>
+        <select id="speed" aria-label="Playback speed" title="Playback speed">
+          <option value="2000">0.5×</option>
+          <option value="1000" selected>1×</option>
+          <option value="450">2×</option>
+          <option value="150">4×</option>
+        </select>
+        <span id="pos" class="pos"></span>
+        <button type="button" id="btn-live" class="live" hidden>● Live</button>
+      </div>
+      <div class="scrub">
+        <div class="marks" id="marks" aria-hidden="true"></div>
+        <input type="range" id="scrubber" min="0" max="0" value="0" aria-label="Step">
+      </div>
+    </footer>
+  </div>
+  <div id="popover" class="popover" role="tooltip" hidden></div>
+  <script type="module" src="./viewer.mjs"></script>
+</body>
+</html>
